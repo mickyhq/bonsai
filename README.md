@@ -226,6 +226,14 @@ It adds a namespaced Claude Code skill:
 
 The skill runs ContextShrink, writes `/tmp/contextshrink.xml`, then Claude Code reads the XML before answering.
 
+This repo also includes:
+
+```text
+CLAUDE.md
+```
+
+That tells Claude Code to run ContextShrink before repo-wide analysis, including full project summaries.
+
 Build the CLI first:
 
 ```sh
@@ -237,6 +245,8 @@ Test the plugin from repo root:
 ```sh
 claude --plugin-dir ./claude/contextshrink
 ```
+
+If Claude Code is already open, restart it with `--plugin-dir` or install the plugin before expecting automatic skill use.
 
 Inside Claude Code, run:
 
@@ -280,7 +290,7 @@ This repo also includes:
 
 That tells Copilot how to treat ContextShrink XML when it sees it.
 
-### Build Copilot Extension
+### Build VS Code Extension
 
 Build ContextShrink first:
 
@@ -305,21 +315,21 @@ npm run package
 The package appears as:
 
 ```text
-contextshrink-copilot-0.1.0.vsix
+contextshrink-vscode-0.1.0.vsix
 ```
 
-### Install Copilot Extension
+### Install VS Code Extension
 
 From repo root, install into VS Code:
 
 ```sh
-"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" --install-extension copilot/contextshrink-vscode/contextshrink-copilot-0.1.0.vsix
+"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" --install-extension copilot/contextshrink-vscode/contextshrink-vscode-0.1.0.vsix
 ```
 
 Install into Cursor:
 
 ```sh
-code --install-extension copilot/contextshrink-vscode/contextshrink-copilot-0.1.0.vsix
+code --install-extension copilot/contextshrink-vscode/contextshrink-vscode-0.1.0.vsix
 ```
 
 On some machines, `code` points to Cursor. Use the full VS Code path above when you want Visual Studio Code.
@@ -333,7 +343,7 @@ Extensions → ... → Install from VSIX...
 Pick:
 
 ```text
-copilot/contextshrink-vscode/contextshrink-copilot-0.1.0.vsix
+copilot/contextshrink-vscode/contextshrink-vscode-0.1.0.vsix
 ```
 
 Restart VS Code after installing.

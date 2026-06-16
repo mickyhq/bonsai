@@ -1,17 +1,17 @@
-# ContextShrink for Copilot
+# ContextShrink
 
-VS Code extension that generates ContextShrink XML for GitHub Copilot Chat.
+VS Code extension that generates ContextShrink XML for GitHub Copilot Chat and Codex.
 
 Install into VS Code:
 
 ```sh
-"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" --install-extension copilot/contextshrink-vscode/contextshrink-copilot-0.1.0.vsix
+"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" --install-extension copilot/contextshrink-vscode/contextshrink-vscode-0.1.0.vsix
 ```
 
 Install into Cursor:
 
 ```sh
-code --install-extension copilot/contextshrink-vscode/contextshrink-copilot-0.1.0.vsix
+code --install-extension copilot/contextshrink-vscode/contextshrink-vscode-0.1.0.vsix
 ```
 
 On some machines, `code` points to Cursor. Use the full VS Code path when you want Visual Studio Code.

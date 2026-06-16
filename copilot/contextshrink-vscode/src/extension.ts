@@ -68,7 +68,7 @@ function getConfig(): ContextShrinkConfig {
     binaryPath: config.get<string>('binaryPath', ''),
     level: config.get<number>('level', 2),
     maxTokens: config.get<number>('maxTokens', 12000),
-    outputFile: expandHome(config.get<string>('outputFile', '/tmp/contextshrink-copilot.xml'))
+    outputFile: expandHome(config.get<string>('outputFile', '/tmp/contextshrink-vscode.xml'))
   }
 }
 
