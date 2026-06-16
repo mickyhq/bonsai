@@ -26,14 +26,6 @@
 - Add tests for empty repos, repos with only unsupported files, invalid globs, and unreadable files.
 - Add tests proving XML and JSON token counts match the final emitted document.
 
-## VS Code And Plugins
-
-- Add plugin smoke tests for binary lookup order:
-  - `BONSAI_BIN`
-  - `bonsai` on `PATH`
-  - repo-local `target/release/bonsai`
-- Check release workflow publishes VSIX and both binary checksums with names that match README.
-
 ## Later
 
 - Add `--tokenizer` for common model families if practical.

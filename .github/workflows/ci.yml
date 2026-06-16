@@ -17,6 +17,10 @@ jobs:
         run: cargo test
       - name: Build release binary
         run: cargo build --release
+      - name: Plugin smoke tests
+        run: bash tests/plugin_binary_lookup.sh
+      - name: Release asset smoke test
+        run: bash tests/release_assets_smoke.sh
       - name: Upload Linux binary
         uses: actions/upload-artifact@v4
         with:
