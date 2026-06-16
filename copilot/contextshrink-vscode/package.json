@@ -1,7 +1,7 @@
 {
   "name": "contextshrink-copilot",
   "displayName": "ContextShrink for Copilot",
-  "description": "Generate token-budgeted ContextShrink XML for GitHub Copilot Chat.",
+  "description": "Generate token-budgeted ContextShrink XML for GitHub Copilot Chat and Codex.",
   "version": "0.1.0",
   "publisher": "local",
   "private": true,
