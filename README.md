@@ -71,7 +71,7 @@ cargo check
 From repo root:
 
 ```sh
-cd "$HOME/dev/bonsai"
+cd "$HOME/dev/context-shrink"
 ```
 
 Build:
@@ -155,13 +155,13 @@ cargo build --release
 Add the marketplace to Codex:
 
 ```sh
-codex plugin marketplace add "$HOME/dev/bonsai/.agents/plugins"
+codex plugin marketplace add "$HOME/dev/context-shrink/.agents/plugins"
 ```
 
 If your Codex CLI expects the JSON file directly, use:
 
 ```sh
-codex plugin marketplace add "$HOME/dev/bonsai/.agents/plugins/marketplace.json"
+codex plugin marketplace add "$HOME/dev/context-shrink/.agents/plugins/marketplace.json"
 ```
 
 Then open Codex app and install or enable `contextshrink`.

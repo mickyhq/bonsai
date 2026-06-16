@@ -83,7 +83,7 @@ async function resolveBinaryPath(context: vscode.ExtensionContext, configuredPat
     return repoBinary
   }
 
-  const homeBinary = path.join(os.homedir(), 'dev', 'bonsai', 'target', 'release', 'contextshrink')
+  const homeBinary = path.join(os.homedir(), 'dev', 'context-shrink', 'target', 'release', 'contextshrink')
   if (await isExecutable(homeBinary)) {
     return homeBinary
   }
