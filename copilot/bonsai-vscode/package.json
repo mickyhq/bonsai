@@ -3,7 +3,10 @@
   "displayName": "Bonsai",
   "description": "Bonsai XML for GitHub Copilot Chat and Codex.",
   "version": "0.1.0",
-  "publisher": "local",
+  "publisher": "MickyBalladelli",
+  "author": {
+    "name": "Micky Balladelli"
+  },
   "private": true,
   "icon": "images/bonsai.png",
   "repository": {
