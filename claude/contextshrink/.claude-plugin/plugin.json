@@ -1,0 +1,10 @@
+{
+  "name": "contextshrink",
+  "description": "Compress local repositories into token-budgeted XML context for Claude Code.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Local developer"
+  },
+  "homepage": "https://github.com/mickyballadelli/context-shrink",
+  "license": "MIT"
+}

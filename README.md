@@ -210,6 +210,46 @@ Use $contextshrink to compress this repo before answering.
 
 The plugin helper tries to build the release binary if it is missing, but building first makes the test clearer.
 
+## Claude Code Plugin
+
+This repo includes a Claude Code plugin:
+
+```text
+claude/contextshrink
+```
+
+It adds a namespaced Claude Code skill:
+
+```text
+/contextshrink:contextshrink
+```
+
+The skill runs ContextShrink, writes `/tmp/contextshrink.xml`, then Claude Code reads the XML before answering.
+
+Build the CLI first:
+
+```sh
+cargo build --release
+```
+
+Test the plugin from repo root:
+
+```sh
+claude --plugin-dir ./claude/contextshrink
+```
+
+Inside Claude Code, run:
+
+```text
+/contextshrink:contextshrink
+```
+
+Helper command:
+
+```sh
+claude/contextshrink/bin/contextshrink-claude . 12000 2 /tmp/contextshrink.xml
+```
+
 ## Copilot Plugin
 
 GitHub Copilot does not use Codex plugins. For Copilot, this repo includes a VS Code extension:
