@@ -229,12 +229,12 @@ npm run package
 The package appears as:
 
 ```text
-copilot/contextshrink-vscode/contextshrink-copilot-0.1.0.vsix
+contextshrink-copilot-0.1.0.vsix
 ```
 
 ### Install Copilot Extension
 
-Install with VS Code CLI:
+From repo root, install with VS Code CLI:
 
 ```sh
 code --install-extension copilot/contextshrink-vscode/contextshrink-copilot-0.1.0.vsix
@@ -252,6 +252,8 @@ Pick:
 copilot/contextshrink-vscode/contextshrink-copilot-0.1.0.vsix
 ```
 
+Restart VS Code after installing.
+
 ### Use With Copilot Chat
 
 Open the repo in VS Code.
@@ -263,6 +265,14 @@ ContextShrink: Copy Copilot Context
 ```
 
 Paste into Copilot Chat, then ask your question.
+
+Smoke test:
+
+```text
+Using this context, explain what src/main.rs does.
+```
+
+If Copilot answers from the XML, the extension works.
 
 For smaller clipboard payload, run:
 
