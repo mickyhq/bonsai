@@ -2,7 +2,7 @@
 
 # ContextShrink
 
-ContextShrink is local CLI tool. It walks a repo, parses code with tree-sitter, shrinks source into skeletons or tree maps, counts tokens, then writes XML for LLM context.
+ContextShrink reduces the number of tokens needed to run LLM queries over a codebase. It walks a repo, parses code with tree-sitter, shrinks source into skeletons or tree maps, counts tokens, then writes XML for LLM context.
 
 ## Build
 
