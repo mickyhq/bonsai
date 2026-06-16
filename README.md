@@ -52,6 +52,40 @@ target/release/contextshrink . --max-tokens 8000 --level 1 --output file --outpu
 
 `--level 3` keeps a compact tree map only.
 
+## Measuring Token Savings
+
+To measure how much ContextShrink saves, compare a full context file against a shrunk context file with the same tokenizer.
+
+Generate full context:
+
+```sh
+target/release/contextshrink . --max-tokens 999999 --level 1 --output file --output-file /tmp/contextshrink-full.xml
+```
+
+Generate shrunk context:
+
+```sh
+target/release/contextshrink . --max-tokens 999999 --level 2 --output file --output-file /tmp/contextshrink-shrunk.xml
+```
+
+Then count tokens in both files with the tokenizer used by your LLM.
+
+Calculate savings:
+
+```text
+tokens_saved = full_tokens - shrunk_tokens
+saving_percent = tokens_saved / full_tokens * 100
+```
+
+Example using this repo:
+
+```text
+full_tokens = 50000
+shrunk_tokens = 9000
+tokens_saved = 41000
+saving_percent = 82%
+```
+
 ## Supported Files
 
 ContextShrink scans:
