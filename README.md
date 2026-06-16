@@ -14,7 +14,7 @@
 
 Naming note: the GitHub repository, CLI binary, Codex plugin, and Claude plugin are `bonsai`; the VS Code package is `bonsai-vscode`.
 
-## Demo
+## Examples
 
 Command panel:
 
