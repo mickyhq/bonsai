@@ -1,7 +1,7 @@
 {
-  "name": "bonsai",
+  "name": "context-shrink",
   "interface": {
-    "displayName": "Bonsai"
+    "displayName": "context-shrink"
   },
   "plugins": [
     {
