@@ -10,7 +10,7 @@
 
 # Bonsai
 
-Bonsai turns a repo into small, inspectable XML or JSON for LLMs. It walks files, shrinks code into useful shapes, counts tokens, and writes context you can paste into Codex, Claude, Copilot, ChatGPT, or another coding agent.
+- *On this repository Bonsai reduced ~76,911 raw tokens to 13,450 shrunk tokens (~82.5% savings) using AST skeletonization — keep your LLM contexts small, accurate, and cheap.*
 
 ## Quick Start
 
