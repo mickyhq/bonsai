@@ -37,7 +37,7 @@ impl TryFrom<u8> for CompressionLevel {
     }
 }
 
-pub fn compress_file(path: &Path, requested_level: CompressionLevel) -> Result<FileVariants> {
+pub fn compress_file(path: &Path, _requested_level: CompressionLevel) -> Result<FileVariants> {
     let source = fs::read_to_string(path)
         .with_context(|| format!("cannot read source file {}", path.display()))?;
     let language = language_for_path(path)?;
@@ -51,7 +51,7 @@ pub fn compress_file(path: &Path, requested_level: CompressionLevel) -> Result<F
         .parse(&source, None)
         .ok_or_else(|| anyhow!("tree-sitter parse failed"))?;
 
-    let full = (requested_level == CompressionLevel::Full).then(|| source.clone());
+    let full = Some(source.clone());
     let skeleton = strip_to_skeleton(&source, tree.root_node(), syntax);
     let tree_map = build_tree_map(&source, tree.root_node(), syntax);
 

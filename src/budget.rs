@@ -58,6 +58,11 @@ pub fn optimize_budget(
     Ok(files)
 }
 
+pub fn count_text_tokens(text: &str) -> Result<usize> {
+    let encoder = cl100k_base().context("cannot load cl100k tokenizer")?;
+    Ok(count_tokens(&encoder, text))
+}
+
 fn refresh_counts(files: &mut [ProcessedFile], encoder: &CoreBPE) {
     for file in files {
         file.token_count = count_tokens(encoder, file.content());

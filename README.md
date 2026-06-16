@@ -44,6 +44,18 @@ Pick another output file:
 target/release/contextshrink . --max-tokens 8000 --level 1 --output file --output-file repo-context.xml
 ```
 
+Print a run summary:
+
+```sh
+target/release/contextshrink . --max-tokens 12000 --level 2 --output file --output-file /tmp/contextshrink.xml --summary
+```
+
+Print token savings stats:
+
+```sh
+target/release/contextshrink . --max-tokens 12000 --level 2 --output file --output-file /tmp/contextshrink.xml --stats
+```
+
 ## Levels
 
 `--level 1` keeps full code first, then shrinks files if token budget is too small.
@@ -54,36 +66,28 @@ target/release/contextshrink . --max-tokens 8000 --level 1 --output file --outpu
 
 ## Measuring Token Savings
 
-To measure how much ContextShrink saves, compare a full context file against a shrunk context file with the same tokenizer.
-
-Generate full context:
+Use `--stats` to measure how much ContextShrink saves:
 
 ```sh
-target/release/contextshrink . --max-tokens 999999 --level 1 --output file --output-file /tmp/contextshrink-full.xml
+target/release/contextshrink . --max-tokens 12000 --level 2 --output file --output-file /tmp/contextshrink.xml --stats
 ```
 
-Generate shrunk context:
-
-```sh
-target/release/contextshrink . --max-tokens 999999 --level 2 --output file --output-file /tmp/contextshrink-shrunk.xml
-```
-
-Then count tokens in both files with the tokenizer used by your LLM.
-
-Calculate savings:
+Example output:
 
 ```text
-tokens_saved = full_tokens - shrunk_tokens
-saving_percent = tokens_saved / full_tokens * 100
+stats:
+  raw_tokens: 50000
+  shrunk_tokens: 9000
+  tokens_saved: 41000
+  saving_percent: 82.00
+  files_scanned: 42
 ```
 
-Example using this repo:
+ContextShrink compares full XML against shrunk XML with the same tokenizer it uses for budgeting.
 
 ```text
-full_tokens = 50000
-shrunk_tokens = 9000
-tokens_saved = 41000
-saving_percent = 82%
+tokens_saved = raw_tokens - shrunk_tokens
+saving_percent = tokens_saved / raw_tokens * 100
 ```
 
 ## Supported Files
