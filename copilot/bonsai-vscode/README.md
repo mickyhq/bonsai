@@ -11,7 +11,7 @@ cargo install --path .
 Install the VSIX:
 
 ```sh
-code --install-extension copilot/bonsai-vscode/bonsai-vscode-0.3.1.vsix
+code --install-extension copilot/bonsai-vscode/bonsai-vscode-0.3.2.vsix
 ```
 
 Run Command Palette:
@@ -37,5 +37,5 @@ The extension checks `BONSAI_BIN`, then `bonsai` on `PATH`, then local release b
 On some machines, `code` points to Cursor. Use the full VS Code path when you want Visual Studio Code:
 
 ```sh
-"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" --install-extension copilot/bonsai-vscode/bonsai-vscode-0.3.1.vsix
+"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" --install-extension copilot/bonsai-vscode/bonsai-vscode-0.3.2.vsix
 ```
