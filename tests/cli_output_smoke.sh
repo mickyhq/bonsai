@@ -67,10 +67,30 @@ agents="$tmp_root/agents"
 "$bin" init-agent "$agents"
 test -f "$agents/AGENTS.md"
 test -f "$agents/CLAUDE.md"
+grep -Fq 'bonsai . --max-tokens 12000 --level 2 --output file --output-file /tmp/bonsai.xml' "$agents/AGENTS.md"
+grep -Fq 'Do not answer from ordinary file browsing until this command succeeds' "$agents/AGENTS.md"
+if grep -Fq 'target/release/bonsai' "$agents/AGENTS.md"; then
+  printf 'init-agent wrote repo-local binary path\n' >&2
+  exit 1
+fi
 if "$bin" init-agent "$agents" >/dev/null 2>&1; then
   printf 'init-agent overwrote without --force\n' >&2
   exit 1
 fi
 "$bin" init-agent "$agents" --force >/dev/null
+
+partial_agents="$tmp_root/partial-agents"
+mkdir -p "$partial_agents"
+printf 'custom claude instructions\n' > "$partial_agents/CLAUDE.md"
+if "$bin" init-agent "$partial_agents" >/dev/null 2>&1; then
+  printf 'init-agent allowed partial overwrite\n' >&2
+  exit 1
+fi
+if test -f "$partial_agents/AGENTS.md"; then
+  printf 'init-agent wrote AGENTS.md before detecting existing CLAUDE.md\n' >&2
+  exit 1
+fi
+"$bin" init-agent "$partial_agents" --force >/dev/null
+test -f "$partial_agents/AGENTS.md"
 
 printf 'cli output smoke passed\n'

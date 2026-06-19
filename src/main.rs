@@ -273,43 +273,73 @@ fn handle_init_agent_command() -> Result<bool> {
 fn init_agent_files(target: &Path, force: bool) -> Result<()> {
     fs::create_dir_all(target)
         .with_context(|| format!("cannot create agent target {}", target.display()))?;
-    write_agent_file(&target.join("AGENTS.md"), force, AGENTS_TEMPLATE)?;
-    write_agent_file(&target.join("CLAUDE.md"), force, CLAUDE_TEMPLATE)?;
+
+    let agent_path = target.join("AGENTS.md");
+    let claude_path = target.join("CLAUDE.md");
+
+    if !force {
+        let existing = [agent_path.as_path(), claude_path.as_path()]
+            .into_iter()
+            .filter(|path| path.exists())
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>();
+
+        if !existing.is_empty() {
+            bail!(
+                "{} already exists; pass --force to overwrite",
+                existing.join(" and ")
+            );
+        }
+    }
+
+    write_agent_file(&agent_path, AGENTS_TEMPLATE)?;
+    write_agent_file(&claude_path, CLAUDE_TEMPLATE)?;
     println!("wrote AGENTS.md and CLAUDE.md in {}", target.display());
     Ok(())
 }
 
-fn write_agent_file(path: &Path, force: bool, contents: &str) -> Result<()> {
-    if path.exists() && !force {
-        bail!(
-            "{} already exists; pass --force to overwrite",
-            path.display()
-        );
-    }
-
+fn write_agent_file(path: &Path, contents: &str) -> Result<()> {
     fs::write(path, contents).with_context(|| format!("cannot write {}", path.display()))
 }
 
 const AGENTS_TEMPLATE: &str = r#"# AGENTS.md
 
-For repo-wide analysis, first run Bonsai. Use this before full project summaries, architecture review, onboarding, broad bug hunting, and questions that need many files:
+For repo-wide analysis, first run Bonsai. This is required for full project summaries, architecture review, onboarding, broad bug hunting, and any question that needs many files. Do not answer from ordinary file browsing until this command succeeds:
 
 ```sh
 bonsai . --max-tokens 12000 --level 2 --output file --output-file /tmp/bonsai.xml
 ```
 
-Inspect `/tmp/bonsai.xml` before answering.
+Then inspect `/tmp/bonsai.xml` before answering.
+
+Expected behavior example:
+
+```text
+User asks: summarize this whole project
+You run: bonsai . --max-tokens 12000 --level 2 --output file --output-file /tmp/bonsai.xml
+You inspect: /tmp/bonsai.xml
+Then answer from that context.
+```
 "#;
 
 const CLAUDE_TEMPLATE: &str = r#"# CLAUDE.md
 
-For repo-wide analysis, first run Bonsai. Use this before full project summaries, architecture review, onboarding, broad bug hunting, and questions that need many files:
+For repo-wide analysis, first run Bonsai. This is required for full project summaries, architecture review, onboarding, broad bug hunting, and any question that needs many files. Do not answer from ordinary file browsing until this command succeeds:
 
 ```sh
 bonsai . --max-tokens 12000 --level 2 --output file --output-file /tmp/bonsai.xml
 ```
 
-Inspect `/tmp/bonsai.xml` before answering.
+Then inspect `/tmp/bonsai.xml` before answering.
+
+Expected behavior example:
+
+```text
+User asks: summarize this whole project
+Claude runs: bonsai . --max-tokens 12000 --level 2 --output file --output-file /tmp/bonsai.xml
+Claude inspects: /tmp/bonsai.xml
+Claude answers from that context.
+```
 "#;
 
 fn max_file_bytes(cli: &Cli) -> Option<u64> {

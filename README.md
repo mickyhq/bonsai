@@ -235,6 +235,15 @@ bonsai init-agent
 bonsai init-agent . --force
 ```
 
+For another project, install `bonsai` on `PATH`, then initialize that project root:
+
+```sh
+cd /path/to/other/project
+bonsai init-agent
+```
+
+That writes `AGENTS.md` and `CLAUDE.md` with instructions that call `bonsai` from `PATH`, so the same setup works outside this repository.
+
 Measure token savings:
 
 ```sh
