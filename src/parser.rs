@@ -59,7 +59,7 @@ pub fn compress_file(path: &Path, _requested_level: CompressionLevel) -> Result<
             )
         }
         None => match syntax {
-            SyntaxKind::Text => (
+            SyntaxKind::Text | SyntaxKind::ObjectiveC => (
                 compact_text_context(path, &source),
                 build_text_tree_map(path, &source),
             ),
@@ -91,6 +91,9 @@ enum SyntaxKind {
     CSharp,
     Swift,
     Kotlin,
+    C,
+    Cpp,
+    ObjectiveC,
     Text,
 }
 
@@ -106,6 +109,9 @@ impl SyntaxKind {
             Some("cs") => Ok(Self::CSharp),
             Some("swift") => Ok(Self::Swift),
             Some("kt") => Ok(Self::Kotlin),
+            Some("c" | "h") => Ok(Self::C),
+            Some("cpp" | "hpp") => Ok(Self::Cpp),
+            Some("m" | "mm") => Ok(Self::ObjectiveC),
             Some("md" | "json" | "yaml" | "yml" | "toml") => Ok(Self::Text),
             Some(other) => bail!("unsupported extension: {other}"),
             None => bail!("file has no extension: {}", path.display()),
@@ -123,9 +129,21 @@ impl SyntaxKind {
             Self::CSharp => Some(tree_sitter_c_sharp::language()),
             Self::Swift => Some(tree_sitter_swift::language()),
             Self::Kotlin => Some(tree_sitter_kotlin::language()),
+            Self::C => Some(tree_sitter_c::language()),
+            Self::Cpp => Some(tree_sitter_cpp::language()),
+            Self::ObjectiveC => Some(objective_c_language()),
             Self::Text => None,
         }
     }
+}
+
+fn objective_c_language() -> Language {
+    let _ = tree_sitter_objc::NODE_TYPES;
+    extern "C" {
+        #[link_name = "tree_sitter_objc"]
+        fn language() -> Language;
+    }
+    unsafe { language() }
 }
 
 #[derive(Debug, Clone)]
@@ -197,7 +215,10 @@ fn body_replacement(node: Node, syntax: SyntaxKind) -> Option<Replacement> {
         | SyntaxKind::Java
         | SyntaxKind::CSharp
         | SyntaxKind::Swift
-        | SyntaxKind::Kotlin => {
+        | SyntaxKind::Kotlin
+        | SyntaxKind::C
+        | SyntaxKind::Cpp
+        | SyntaxKind::ObjectiveC => {
             if is_brace_body_node(node.kind())
                 && node.parent().is_some_and(is_static_language_callable)
             {
@@ -244,7 +265,9 @@ fn is_static_language_callable(node: Node) -> bool {
         node.kind(),
         "function_declaration"
             | "method_declaration"
+            | "method_definition"
             | "constructor_declaration"
+            | "function_definition"
             | "function_literal"
             | "lambda_expression"
             | "local_function_statement"
@@ -255,7 +278,12 @@ fn is_static_language_callable(node: Node) -> bool {
 fn is_brace_body_node(kind: &str) -> bool {
     matches!(
         kind,
-        "block" | "constructor_body" | "function_body" | "code_block" | "control_structure_body"
+        "block"
+            | "compound_statement"
+            | "constructor_body"
+            | "function_body"
+            | "code_block"
+            | "control_structure_body"
     )
 }
 
@@ -413,6 +441,28 @@ fn should_emit_tree_map_node(node: Node, syntax: SyntaxKind) -> bool {
                 | "function_declaration"
                 | "property_declaration"
                 | "typealias_declaration"
+        ),
+        SyntaxKind::C | SyntaxKind::Cpp | SyntaxKind::ObjectiveC => matches!(
+            kind,
+            "preproc_include"
+                | "preproc_def"
+                | "preproc_function_def"
+                | "function_definition"
+                | "declaration"
+                | "type_definition"
+                | "struct_specifier"
+                | "union_specifier"
+                | "enum_specifier"
+                | "class_specifier"
+                | "namespace_definition"
+                | "template_declaration"
+                | "class_interface"
+                | "class_implementation"
+                | "protocol_declaration"
+                | "property_declaration"
+                | "property_implementation"
+                | "method_declaration"
+                | "method_definition"
         ),
         SyntaxKind::Text => false,
     }
@@ -863,6 +913,86 @@ class Greeter {
                 "class Greeter",
                 "return \"hello",
             ),
+            (
+                "c",
+                r#"
+#include <stdio.h>
+
+int greet(const char *name) {
+    return printf("hello %s", name);
+}
+"#,
+                "int greet",
+                "return printf",
+            ),
+            (
+                "h",
+                r#"
+#pragma once
+
+int greet(const char *name);
+"#,
+                "int greet",
+                "",
+            ),
+            (
+                "cpp",
+                r#"
+#include <string>
+
+class Greeter {
+public:
+    std::string greet(const std::string &name) {
+        return "hello " + name;
+    }
+};
+"#,
+                "class Greeter",
+                "return \"hello",
+            ),
+            (
+                "hpp",
+                r#"
+#pragma once
+
+class Greeter {
+public:
+    std::string greet(const std::string &name);
+};
+"#,
+                "class Greeter",
+                "",
+            ),
+            (
+                "m",
+                r#"
+#import <Foundation/Foundation.h>
+
+@implementation Greeter
+- (NSString *)greet:(NSString *)name {
+    return [@"hello " stringByAppendingString:name];
+}
+@end
+"#,
+                "greet:(NSString *)name",
+                "return [@\"hello",
+            ),
+            (
+                "mm",
+                r#"
+#import <Foundation/Foundation.h>
+#include <string>
+
+@implementation Greeter
+- (NSString *)greet:(NSString *)name {
+    std::string prefix = "hello ";
+    return [NSString stringWithUTF8String:prefix.c_str()];
+}
+@end
+"#,
+                "greet:(NSString *)name",
+                "std::string prefix",
+            ),
         ];
 
         for (extension, source, expected_shape, body_text) in cases {
@@ -875,7 +1005,7 @@ class Greeter {
                 variants.tree_map
             );
             assert!(
-                !variants.skeleton.contains(body_text),
+                body_text.is_empty() || !variants.skeleton.contains(body_text),
                 "body kept for {extension}: {}",
                 variants.skeleton
             );

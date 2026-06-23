@@ -487,10 +487,10 @@ docs/output-schema.md
 Bonsai scans:
 
 ```text
-.js .jsx .ts .tsx .py .rs .go .java .cs .swift .kt .md .json .yaml .yml .toml
+.js .jsx .ts .tsx .py .rs .go .java .cs .swift .kt .c .h .cpp .hpp .m .mm .md .json .yaml .yml .toml
 ```
 
-It parses JavaScript, TypeScript, Python, Rust, Go, Java, C#, Swift, and Kotlin with tree-sitter. Docs and config files use compact line-based context.
+It parses JavaScript, TypeScript, Python, Rust, Go, Java, C#, Swift, Kotlin, C, C++, and Objective-C with tree-sitter. Docs and config files use compact line-based context.
 
 It respects `.gitignore` and `.cursorignore`.
 

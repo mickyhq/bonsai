@@ -5,7 +5,6 @@
 
 ## Parser Coverage
 
-- Add support for `.c`, `.h`, `.cpp`, `.hpp`, `.m`, and `.mm`.
 - Add support for `.vue`, `.svelte`, `.astro`, and `.html`.
 - Improve Markdown compression to preserve tables, links, and code fence language names.
 - Improve JSON/YAML/TOML compression to keep top-level comments where supported.

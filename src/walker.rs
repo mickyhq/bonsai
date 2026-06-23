@@ -6,8 +6,8 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::{DirEntry, WalkBuilder, WalkState};
 
 pub const TARGET_EXTENSIONS: &[&str] = &[
-    "js", "jsx", "ts", "tsx", "py", "rs", "go", "java", "cs", "swift", "kt", "md", "json", "yaml",
-    "yml", "toml",
+    "js", "jsx", "ts", "tsx", "py", "rs", "go", "java", "cs", "swift", "kt", "c", "h", "cpp",
+    "hpp", "m", "mm", "md", "json", "yaml", "yml", "toml",
 ];
 
 #[derive(Debug, Clone)]
@@ -167,6 +167,12 @@ mod tests {
         write_file(&root, "Program.cs", "");
         write_file(&root, "View.swift", "");
         write_file(&root, "Service.kt", "");
+        write_file(&root, "main.c", "");
+        write_file(&root, "main.h", "");
+        write_file(&root, "main.cpp", "");
+        write_file(&root, "main.hpp", "");
+        write_file(&root, "View.m", "");
+        write_file(&root, "View.mm", "");
         write_file(&root, "README.md", "");
         write_file(&root, "package.json", "{}");
         write_file(&root, "config.yaml", "");
@@ -183,6 +189,12 @@ mod tests {
         assert!(names.contains(&"Program.cs".to_owned()));
         assert!(names.contains(&"View.swift".to_owned()));
         assert!(names.contains(&"Service.kt".to_owned()));
+        assert!(names.contains(&"main.c".to_owned()));
+        assert!(names.contains(&"main.h".to_owned()));
+        assert!(names.contains(&"main.cpp".to_owned()));
+        assert!(names.contains(&"main.hpp".to_owned()));
+        assert!(names.contains(&"View.m".to_owned()));
+        assert!(names.contains(&"View.mm".to_owned()));
         assert!(names.contains(&"README.md".to_owned()));
         assert!(names.contains(&"package.json".to_owned()));
         assert!(names.contains(&"config.yaml".to_owned()));
