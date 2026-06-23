@@ -151,6 +151,9 @@ fn main() -> Result<()> {
     if handle_init_agent_command()? {
         return Ok(());
     }
+    if handle_cache_command()? {
+        return Ok(());
+    }
 
     let cli = Cli::parse();
     let root = fs::canonicalize(&cli.path)
@@ -348,6 +351,69 @@ fn handle_init_agent_command() -> Result<bool> {
 
     init_agent_files(&target, force)?;
     Ok(true)
+}
+
+fn handle_cache_command() -> Result<bool> {
+    let args = env::args().collect::<Vec<_>>();
+    if args.get(1).map(String::as_str) != Some("cache") {
+        return Ok(false);
+    }
+
+    match args.get(2).map(String::as_str) {
+        Some("clear") => {
+            let target = cache_command_target(&args[3..])?;
+            clear_cache(&target)?;
+            Ok(true)
+        }
+        Some("--help") | Some("-h") | None => {
+            println!("Usage: bonsai cache clear [PATH]");
+            Ok(true)
+        }
+        Some(command) => bail!("unknown cache command {command}"),
+    }
+}
+
+fn cache_command_target(args: &[String]) -> Result<PathBuf> {
+    let mut target = PathBuf::from(".");
+    let mut saw_path = false;
+
+    for arg in args {
+        match arg.as_str() {
+            "--help" | "-h" => {
+                println!("Usage: bonsai cache clear [PATH]");
+                std::process::exit(0);
+            }
+            value if value.starts_with('-') => bail!("unknown cache clear option {value}"),
+            value => {
+                if saw_path {
+                    bail!("cache clear accepts only one path");
+                }
+                target = PathBuf::from(value);
+                saw_path = true;
+            }
+        }
+    }
+
+    Ok(target)
+}
+
+fn clear_cache(target: &Path) -> Result<()> {
+    let root = fs::canonicalize(target)
+        .with_context(|| format!("cannot resolve cache target {}", target.display()))?;
+    let cache_path = cache_path_for_root(&root);
+
+    match fs::remove_file(&cache_path) {
+        Ok(()) => println!("cleared cache for {}", root.display()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            println!("no cache for {}", root.display());
+        }
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("cannot remove cache {}", cache_path.display()));
+        }
+    }
+
+    Ok(())
 }
 
 fn init_agent_files(target: &Path, force: bool) -> Result<()> {

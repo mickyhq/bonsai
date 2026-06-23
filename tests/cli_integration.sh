@@ -118,6 +118,11 @@ if grep -Fq 'path="Cargo.toml"' "$tmp_root/incremental-third.xml"; then
   printf 'incremental run included unchanged file\n' >&2
   exit 1
 fi
+"$bin" cache clear "$incremental_repo" > "$tmp_root/cache-clear.txt"
+grep -Fq 'cleared cache for' "$tmp_root/cache-clear.txt"
+"$bin" "$incremental_repo" --incremental --output-file "$tmp_root/incremental-after-clear.xml"
+grep -Fq 'path="Cargo.toml"' "$tmp_root/incremental-after-clear.xml"
+grep -Fq 'path="src/lib.rs"' "$tmp_root/incremental-after-clear.xml"
 
 incremental_options="$tmp_root/incremental-options"
 make_golden_repo "$incremental_options"

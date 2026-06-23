@@ -2,7 +2,7 @@
 
 ## Incremental Runs
 
-- Add a cache clear command, like `bonsai cache clear [PATH]`.
+No immediate items.
 
 ## Output Quality
 

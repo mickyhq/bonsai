@@ -256,6 +256,13 @@ bonsai . --incremental --incremental-summary
 
 Bonsai stores the file-selection options with the cache. If `--include`, `--exclude`, `--max-file-bytes`, or gitignore handling changes, the next incremental run includes the selected files once instead of comparing against a stale selection.
 
+Clear the local cache for a repo:
+
+```sh
+bonsai cache clear
+bonsai cache clear /path/to/repo
+```
+
 Write starter agent instructions:
 
 ```sh
