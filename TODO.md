@@ -23,7 +23,6 @@
 
 ## Testing And Release
 
-- Add integration tests for incremental mode with deleted files and changed include/exclude filters.
 - Add golden fixtures for JSON incremental output.
 - Run `cargo fmt --check` in CI once current formatting drift is cleaned up.
 - Add release smoke test that runs downloaded binaries with `--incremental`.
