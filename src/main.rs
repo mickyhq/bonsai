@@ -22,8 +22,8 @@ use budget::{
 };
 use cache::{cache_path_for_root, CacheDiagnostics, CacheMetadata, CacheStatus, ParseCache};
 use formatter::{
-    format_repository_context_json, format_repository_context_xml, DirectorySummary, FormatOptions,
-    ProjectMapMode as FormatProjectMapMode, RepositoryMetadata,
+    format_repository_context_json, format_repository_context_text, format_repository_context_xml,
+    DirectorySummary, FormatOptions, ProjectMapMode as FormatProjectMapMode, RepositoryMetadata,
 };
 use parser::{compress_file, parser_support_for_extension, CompressionLevel, ParserMode};
 use walker::{
@@ -34,7 +34,7 @@ use walker::{
 #[derive(Debug, Parser)]
 #[command(name = "bonsai")]
 #[command(version)]
-#[command(about = "Shrink repository source context into token-efficient XML or JSON")]
+#[command(about = "Shrink repository source context into token-efficient XML, JSON, or text")]
 struct Cli {
     #[arg(default_value = ".")]
     path: PathBuf,
@@ -240,6 +240,7 @@ enum OutputDestination {
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum OutputFormat {
     Json,
+    Text,
     Xml,
 }
 
@@ -1259,6 +1260,7 @@ fn format_context(
     let options = format_options(files, cli, deleted_files);
     match cli.format {
         OutputFormat::Json => format_repository_context_json(files, metadata, &options),
+        OutputFormat::Text => format_repository_context_text(files, metadata, &options),
         OutputFormat::Xml => format_repository_context_xml(files, metadata, &options),
     }
 }
@@ -1428,6 +1430,7 @@ fn maybe_wrap_prompt(context: String, cli: &Cli) -> String {
 
     let format_name = match cli.format {
         OutputFormat::Json => "JSON",
+        OutputFormat::Text => "text",
         OutputFormat::Xml => "XML",
     };
     let task = cli.ask_template.as_deref().unwrap_or(
@@ -1613,6 +1616,11 @@ mod tests {
     #[test]
     fn json_output_tokens_match_final_document() {
         assert_final_token_count_matches(OutputFormat::Json);
+    }
+
+    #[test]
+    fn text_output_tokens_match_final_document() {
+        assert_final_token_count_matches(OutputFormat::Text);
     }
 
     #[test]

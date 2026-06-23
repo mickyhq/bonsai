@@ -84,6 +84,16 @@ if [[ "$first_path" != '"path":"Cargo.toml"' ]]; then
   exit 1
 fi
 
+"$bin" "$repo" --format text --output-file "$tmp_root/context.txt"
+grep -Fq 'bonsai_context' "$tmp_root/context.txt"
+grep -Fq 'project_map' "$tmp_root/context.txt"
+grep -Fq 'files' "$tmp_root/context.txt"
+grep -Fq -- '--- src/deep/leaf.rs L2 tokens=' "$tmp_root/context.txt"
+if grep -Fq '<repository_context>' "$tmp_root/context.txt"; then
+  printf 'text output included XML root\n' >&2
+  exit 1
+fi
+
 "$bin" "$repo" --file-hashes --project-map-only --output-file "$tmp_root/hashes.xml"
 grep -Eq 'hash="[0-9a-f]{64}"' "$tmp_root/hashes.xml"
 

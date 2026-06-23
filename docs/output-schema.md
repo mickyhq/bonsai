@@ -1,6 +1,6 @@
 # Bonsai Output Schema
 
-Bonsai writes XML by default. JSON is available with `--format json`.
+Bonsai writes XML by default. JSON is available with `--format json`. Lower-overhead text is available with `--format text`.
 
 ## XML
 
@@ -136,3 +136,39 @@ With `--no-token-counts`, token fields are omitted:
 ```json
 { "path": "src/main.rs", "level": 2 }
 ```
+
+## Text
+
+Text output is lower overhead than XML/JSON and is meant for agent context, not strict parsing.
+
+```text
+bonsai_context
+generated_at: unix_seconds
+repo_root: /path/to/repo
+max_tokens: 12000
+compression_level: 2
+file_count: 3
+
+project_map
+src/main.rs L2 tokens=120
+
+deleted_files
+src/old.rs
+
+directory_summaries
+src files=2 tokens=240
+
+files
+--- src/main.rs L2 tokens=120
+compressed content
+```
+
+`--project-map-only` emits only the text project map. `--project-map compact` groups entries by directory:
+
+```text
+project_map compact
+[src] files=2 tokens=240
+main.rs L2 tokens=120
+```
+
+`--no-token-counts` omits `tokens=` fields.

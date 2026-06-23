@@ -185,6 +185,75 @@ pub fn format_repository_context_json(
     output
 }
 
+pub fn format_repository_context_text(
+    files: &[ProcessedFile],
+    metadata: &RepositoryMetadata,
+    options: &FormatOptions,
+) -> String {
+    if options.project_map_only {
+        let mut output = String::new();
+        push_project_map_text(
+            &mut output,
+            files,
+            options.include_file_hashes,
+            options.include_token_counts,
+            options.project_map_mode,
+        );
+        return output;
+    }
+
+    let mut output = String::new();
+    output.push_str("bonsai_context\n");
+    output.push_str("generated_at: ");
+    output.push_str(&metadata.generated_at);
+    output.push_str("\nrepo_root: ");
+    output.push_str(&metadata.repo_root);
+    output.push_str("\nmax_tokens: ");
+    output.push_str(&metadata.max_tokens.to_string());
+    output.push_str("\ncompression_level: ");
+    output.push_str(&metadata.compression_level.to_string());
+    output.push_str("\nfile_count: ");
+    output.push_str(&metadata.file_count.to_string());
+    output.push_str("\n\n");
+
+    push_project_map_text(
+        &mut output,
+        files,
+        options.include_file_hashes,
+        options.include_token_counts,
+        options.project_map_mode,
+    );
+    push_deleted_files_text(&mut output, &options.deleted_files);
+    push_directory_summaries_text(
+        &mut output,
+        &options.directory_summaries,
+        options.include_token_counts,
+    );
+
+    if options.include_files {
+        output.push_str("files\n");
+        for file in files {
+            output.push_str("--- ");
+            output.push_str(&file.path);
+            output.push_str(" L");
+            output.push_str(&file.level.as_u8().to_string());
+            if options.include_token_counts {
+                output.push_str(" tokens=");
+                output.push_str(&file.token_count.to_string());
+            }
+            output.push('\n');
+            if options.include_content {
+                output.push_str(file.content());
+                if !file.content().ends_with('\n') {
+                    output.push('\n');
+                }
+            }
+        }
+    }
+
+    output
+}
+
 fn push_metadata_xml(output: &mut String, metadata: &RepositoryMetadata) {
     output.push_str("<metadata generated_at=\"");
     push_xml_escaped(output, &metadata.generated_at);
@@ -342,6 +411,111 @@ fn push_deleted_files_json(output: &mut String, deleted_files: &[String], indent
     output.push('\n');
     output.push_str(&base);
     output.push(']');
+}
+
+fn push_project_map_text(
+    output: &mut String,
+    files: &[ProcessedFile],
+    include_hash: bool,
+    include_tokens: bool,
+    mode: ProjectMapMode,
+) {
+    if mode == ProjectMapMode::Compact {
+        push_compact_project_map_text(output, files, include_hash, include_tokens);
+        return;
+    }
+
+    output.push_str("project_map\n");
+    for file in files {
+        output.push_str(&file.path);
+        output.push_str(" L");
+        output.push_str(&file.level.as_u8().to_string());
+        if include_tokens {
+            output.push_str(" tokens=");
+            output.push_str(&file.token_count.to_string());
+        }
+        if include_hash {
+            if let Some(hash) = &file.content_hash {
+                output.push_str(" hash=");
+                output.push_str(hash);
+            }
+        }
+        output.push('\n');
+    }
+    output.push('\n');
+}
+
+fn push_compact_project_map_text(
+    output: &mut String,
+    files: &[ProcessedFile],
+    include_hash: bool,
+    include_tokens: bool,
+) {
+    output.push_str("project_map compact\n");
+    for directory in project_map_directories(files) {
+        output.push('[');
+        output.push_str(&directory.path);
+        output.push_str("] files=");
+        output.push_str(&directory.file_count.to_string());
+        if include_tokens {
+            output.push_str(" tokens=");
+            output.push_str(&directory.tokens.to_string());
+        }
+        output.push('\n');
+        for file in directory.files {
+            output.push_str(file_name(&file.path));
+            output.push_str(" L");
+            output.push_str(&file.level.as_u8().to_string());
+            if include_tokens {
+                output.push_str(" tokens=");
+                output.push_str(&file.token_count.to_string());
+            }
+            if include_hash {
+                if let Some(hash) = &file.content_hash {
+                    output.push_str(" hash=");
+                    output.push_str(hash);
+                }
+            }
+            output.push('\n');
+        }
+    }
+    output.push('\n');
+}
+
+fn push_deleted_files_text(output: &mut String, deleted_files: &[String]) {
+    if deleted_files.is_empty() {
+        return;
+    }
+
+    output.push_str("deleted_files\n");
+    for path in deleted_files {
+        output.push_str(path);
+        output.push('\n');
+    }
+    output.push('\n');
+}
+
+fn push_directory_summaries_text(
+    output: &mut String,
+    summaries: &[DirectorySummary],
+    include_tokens: bool,
+) {
+    if summaries.is_empty() {
+        return;
+    }
+
+    output.push_str("directory_summaries\n");
+    for summary in summaries {
+        output.push_str(&summary.path);
+        output.push_str(" files=");
+        output.push_str(&summary.file_count.to_string());
+        if include_tokens {
+            output.push_str(" tokens=");
+            output.push_str(&summary.tokens.to_string());
+        }
+        output.push('\n');
+    }
+    output.push('\n');
 }
 
 fn push_project_map_json(
@@ -616,6 +790,20 @@ mod tests {
     }
 
     #[test]
+    fn text_includes_low_overhead_context() {
+        let files = vec![processed_file()];
+        let text = format_repository_context_text(&files, &metadata(), &full_options());
+
+        assert!(text.starts_with("bonsai_context\n"));
+        assert!(text.contains("project_map\n"));
+        assert!(text.contains("src/<bad>&\"name\".rs L2 tokens=7"));
+        assert!(text.contains("files\n--- src/<bad>&\"name\".rs L2 tokens=7\n"));
+        assert!(text.contains("if a < b && name == 'x' { \"yes\" }"));
+        assert!(!text.contains("<repository_context>"));
+        assert!(!text.contains("\"project_map\""));
+    }
+
+    #[test]
     fn can_omit_file_bodies() {
         let files = vec![processed_file()];
         let options = FormatOptions {
@@ -704,6 +892,7 @@ mod tests {
 
         let xml = format_repository_context_xml(&files, &metadata(), &options);
         let json = format_repository_context_json(&files, &metadata(), &options);
+        let text = format_repository_context_text(&files, &metadata(), &options);
 
         assert!(xml.contains("<dir path=\"src\" files=\"1\">"));
         assert!(xml.contains("<entry name=\"lib.rs\" level=\"2\" />"));
@@ -713,6 +902,9 @@ mod tests {
         assert!(json.contains("\"name\":\"lib.rs\",\"level\":2"));
         assert!(json.contains("\"path\":\"src/lib.rs\",\"level\":2,\"content\""));
         assert!(!json.contains("\"tokens\""));
+        assert!(text.contains("[src] files=1"));
+        assert!(text.contains("lib.rs L2\n"));
+        assert!(!text.contains("tokens="));
     }
 
     #[test]

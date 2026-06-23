@@ -169,6 +169,7 @@ Write JSON:
 
 ```sh
 bonsai . --format json --output-file /tmp/bonsai.json
+bonsai . --format text --output-file /tmp/bonsai.txt
 ```
 
 Copy a prompt to the clipboard:
@@ -311,7 +312,7 @@ Bonsai stores file-selection options with the cache. If `--include`, `--exclude`
 
 ## Output
 
-XML is default. JSON is available with `--format json`.
+XML is default. JSON is available with `--format json`. Lower-overhead text is available with `--format text`.
 
 Output includes:
 
