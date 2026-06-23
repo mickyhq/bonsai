@@ -118,6 +118,20 @@ if grep -Fq 'path="Cargo.toml"' "$tmp_root/incremental-third.xml"; then
   printf 'incremental run included unchanged file\n' >&2
   exit 1
 fi
+
+incremental_json_repo="$tmp_root/incremental-json-repo"
+make_golden_repo "$incremental_json_repo"
+"$bin" "$incremental_json_repo" --max-tokens 12000 --level 2 --format json --output-file "$tmp_root/incremental-json-seed.json"
+cat >> "$incremental_json_repo/src/lib.rs" <<'RS'
+
+pub fn farewell(name: &str) -> String {
+    format!("bye {name}")
+}
+RS
+"$bin" "$incremental_json_repo" --max-tokens 12000 --level 2 --format json --incremental --output-file "$tmp_root/incremental-context.json"
+normalize_json "$tmp_root/incremental-context.json" > "$tmp_root/incremental-context.normalized.json"
+diff -u "$repo_root/tests/golden/incremental-context.json" "$tmp_root/incremental-context.normalized.json"
+
 "$bin" cache clear "$incremental_repo" > "$tmp_root/cache-clear.txt"
 grep -Fq 'cleared cache for' "$tmp_root/cache-clear.txt"
 "$bin" "$incremental_repo" --incremental --output-file "$tmp_root/incremental-after-clear.xml"

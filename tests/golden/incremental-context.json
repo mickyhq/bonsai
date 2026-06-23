@@ -1,0 +1,9 @@
+{
+  "metadata": {"generated_at":"TIMESTAMP","repo_root":"/REPO","max_tokens":12000,"compression_level":2,"file_count":1},
+  "project_map": [
+    {"path":"src/lib.rs","level":2,"tokens":26}
+  ],
+  "files": [
+    {"path":"src/lib.rs","level":2,"tokens":26,"content":"pub fn greet(name: &str) -> String { ... }\n\npub fn farewell(name: &str) -> String { ... }\n"}
+  ]
+}
