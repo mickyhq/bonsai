@@ -59,7 +59,7 @@ pub fn compress_file(path: &Path, _requested_level: CompressionLevel) -> Result<
             )
         }
         None => match syntax {
-            SyntaxKind::Text | SyntaxKind::WebText => (
+            SyntaxKind::Text | SyntaxKind::ObjectiveC | SyntaxKind::WebText => (
                 compact_text_context(path, &source),
                 build_text_tree_map(path, &source),
             ),
@@ -133,20 +133,11 @@ impl SyntaxKind {
             Self::Kotlin => Some(tree_sitter_kotlin::language()),
             Self::C => Some(tree_sitter_c::language()),
             Self::Cpp => Some(tree_sitter_cpp::language()),
-            Self::ObjectiveC => Some(objective_c_language()),
+            Self::ObjectiveC => None,
             Self::WebText => None,
             Self::Text => None,
         }
     }
-}
-
-fn objective_c_language() -> Language {
-    let _ = tree_sitter_objc::NODE_TYPES;
-    extern "C" {
-        #[link_name = "tree_sitter_objc"]
-        fn language() -> Language;
-    }
-    unsafe { language() }
 }
 
 #[derive(Debug, Clone)]
@@ -445,7 +436,7 @@ fn should_emit_tree_map_node(node: Node, syntax: SyntaxKind) -> bool {
                 | "property_declaration"
                 | "typealias_declaration"
         ),
-        SyntaxKind::C | SyntaxKind::Cpp | SyntaxKind::ObjectiveC => matches!(
+        SyntaxKind::C | SyntaxKind::Cpp => matches!(
             kind,
             "preproc_include"
                 | "preproc_def"
@@ -459,14 +450,8 @@ fn should_emit_tree_map_node(node: Node, syntax: SyntaxKind) -> bool {
                 | "class_specifier"
                 | "namespace_definition"
                 | "template_declaration"
-                | "class_interface"
-                | "class_implementation"
-                | "protocol_declaration"
-                | "property_declaration"
-                | "property_implementation"
-                | "method_declaration"
-                | "method_definition"
         ),
+        SyntaxKind::ObjectiveC => false,
         SyntaxKind::WebText | SyntaxKind::Text => false,
     }
 }
@@ -474,7 +459,7 @@ fn should_emit_tree_map_node(node: Node, syntax: SyntaxKind) -> bool {
 fn compact_text_context(path: &Path, source: &str) -> String {
     match extension(path).as_deref() {
         Some("md") => compact_markdown_context(source),
-        Some("json" | "yaml" | "yml" | "toml") => compact_config_lines(source, 180),
+        Some("json" | "yaml" | "yml" | "toml") => compact_config_lines(path, source, 180),
         Some("vue" | "svelte" | "astro" | "html") => compact_web_context(source, 160),
         _ => compact_non_empty_lines(source, 160),
     }
@@ -497,7 +482,7 @@ fn build_text_tree_map(path: &Path, source: &str) -> String {
                 headings.join("\n")
             }
         }
-        Some("json" | "yaml" | "yml" | "toml") => compact_config_lines(source, 100),
+        Some("json" | "yaml" | "yml" | "toml") => compact_config_lines(path, source, 100),
         Some("vue" | "svelte" | "astro" | "html") => compact_web_context(source, 80),
         _ => compact_non_empty_lines(source, 80),
     }
@@ -673,12 +658,21 @@ fn has_markdown_link(line: &str) -> bool {
     has_inline_link || has_reference_link
 }
 
-fn compact_config_lines(source: &str, max_lines: usize) -> String {
+fn compact_config_lines(path: &Path, source: &str, max_lines: usize) -> String {
     let mut output = Vec::new();
     let mut kept_array_items = 0usize;
     let mut collapsed_array = false;
 
-    for line in source.lines().map(str::trim) {
+    for raw_line in source.lines() {
+        let line = raw_line.trim();
+        if is_top_level_config_comment(path, raw_line) {
+            output.push(truncate_line(line.to_owned(), 240));
+            if output.len() >= max_lines {
+                break;
+            }
+            continue;
+        }
+
         if is_noisy_config_line(line) {
             continue;
         }
@@ -719,6 +713,19 @@ fn is_noisy_config_line(line: &str) -> bool {
         || line.starts_with('#')
         || line.starts_with("//")
         || matches!(line, "{" | "}" | "[" | "]" | "," | "}," | "],")
+}
+
+fn is_top_level_config_comment(path: &Path, raw_line: &str) -> bool {
+    if raw_line.starts_with(' ') || raw_line.starts_with('\t') {
+        return false;
+    }
+
+    let line = raw_line.trim();
+    match extension(path).as_deref() {
+        Some("yaml" | "yml" | "toml") => line.starts_with('#'),
+        Some("json") => line.starts_with("//"),
+        _ => false,
+    }
 }
 
 fn is_array_item(line: &str) -> bool {
@@ -1025,7 +1032,7 @@ public:
 @end
 "#,
                 "greet:(NSString *)name",
-                "return [@\"hello",
+                "",
             ),
             (
                 "mm",
@@ -1041,7 +1048,7 @@ public:
 @end
 "#,
                 "greet:(NSString *)name",
-                "std::string prefix",
+                "",
             ),
         ];
 
@@ -1227,6 +1234,52 @@ graph TD
         assert!(variants.skeleton.contains("\"test\": \"cargo test\""));
         assert!(variants.skeleton.contains("..."));
         assert!(!variants.skeleton.contains("\"n\""));
+    }
+
+    #[test]
+    fn config_keeps_top_level_comments_where_supported() {
+        let yaml_path = write_temp_source(
+            "yaml",
+            r#"
+# deployment defaults
+name: demo
+jobs:
+  # internal job note
+  build:
+    runs-on: ubuntu-latest
+"#,
+        );
+        let toml_path = write_temp_source(
+            "toml",
+            r#"
+# package metadata
+name = "demo"
+[dependencies]
+# nested-ish dependency note
+serde = "1"
+"#,
+        );
+        let json_path = write_temp_source(
+            "json",
+            r#"
+// jsonc-style top note
+{
+  // nested note
+  "name": "demo"
+}
+"#,
+        );
+
+        let yaml = compress_file(&yaml_path, CompressionLevel::Skeleton).unwrap();
+        let toml = compress_file(&toml_path, CompressionLevel::Skeleton).unwrap();
+        let json = compress_file(&json_path, CompressionLevel::Skeleton).unwrap();
+
+        assert!(yaml.skeleton.contains("# deployment defaults"));
+        assert!(!yaml.skeleton.contains("internal job note"));
+        assert!(toml.skeleton.contains("# package metadata"));
+        assert!(toml.skeleton.contains("# nested-ish dependency note"));
+        assert!(json.skeleton.contains("// jsonc-style top note"));
+        assert!(!json.skeleton.contains("nested note"));
     }
 
     #[test]

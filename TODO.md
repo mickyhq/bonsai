@@ -5,7 +5,6 @@
 
 ## Parser Coverage
 
-- Improve JSON/YAML/TOML compression to keep top-level comments where supported.
 
 ## CLI Ergonomics
 

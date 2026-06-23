@@ -490,7 +490,7 @@ Bonsai scans:
 .js .jsx .ts .tsx .py .rs .go .java .cs .swift .kt .c .h .cpp .hpp .m .mm .vue .svelte .astro .html .md .json .yaml .yml .toml
 ```
 
-It parses JavaScript, TypeScript, Python, Rust, Go, Java, C#, Swift, Kotlin, C, C++, and Objective-C with tree-sitter. Web templates, docs, and config files use compact line-based context.
+It parses JavaScript, TypeScript, Python, Rust, Go, Java, C#, Swift, Kotlin, C, and C++ with tree-sitter. Objective-C, web templates, docs, and config files use compact line-based context.
 
 It respects `.gitignore` and `.cursorignore`.
 
