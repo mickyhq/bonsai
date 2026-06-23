@@ -76,13 +76,23 @@ bonsai init-agent --force
 Download a release binary:
 
 ```text
-https://github.com/MickyBalladelli/bonsai/releases/latest
+https://github.com/mickyhq/bonsai/releases/latest
+```
+
+Release assets:
+
+```text
+bonsai-linux-x64
+bonsai-macos-arm64
+bonsai-linux-x64.sha256
+bonsai-macos-arm64.sha256
+bonsai-vscode-*.vsix
 ```
 
 macOS Apple Silicon:
 
 ```sh
-curl -L -o bonsai https://github.com/MickyBalladelli/bonsai/releases/latest/download/bonsai-macos-arm64
+curl -L -o bonsai https://github.com/mickyhq/bonsai/releases/latest/download/bonsai-macos-arm64
 chmod +x bonsai
 sudo mv bonsai /usr/local/bin/bonsai
 ```
@@ -90,7 +100,7 @@ sudo mv bonsai /usr/local/bin/bonsai
 Linux x64:
 
 ```sh
-curl -L -o bonsai https://github.com/MickyBalladelli/bonsai/releases/latest/download/bonsai-linux-x64
+curl -L -o bonsai https://github.com/mickyhq/bonsai/releases/latest/download/bonsai-linux-x64
 chmod +x bonsai
 sudo mv bonsai /usr/local/bin/bonsai
 ```
@@ -104,7 +114,7 @@ cargo install --path .
 Install from GitHub:
 
 ```sh
-cargo install --git https://github.com/MickyBalladelli/bonsai.git
+cargo install --git https://github.com/mickyhq/bonsai.git
 ```
 
 Check your install:

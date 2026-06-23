@@ -23,12 +23,18 @@ done
 workflow_patterns=(
   'dist/bonsai-${{ matrix.name }}'
   'dist/bonsai-${{ matrix.name }}.sha256'
+  'Smoke packaged binary'
+  '--incremental --output-file "$tmp_repo/first.xml"'
+  '--incremental --output-file "$tmp_repo/second.xml"'
+  'packaged binary incremental run included unchanged file'
+  'Smoke downloaded Linux binary'
+  'downloaded binary incremental run included unchanged file'
   'copilot/bonsai-vscode/bonsai-vscode-*.vsix'
   'files: dist/*'
 )
 
 for pattern in "${workflow_patterns[@]}"; do
-  if ! grep -Fq "$pattern" "$release"; then
+  if ! grep -Fq -- "$pattern" "$release"; then
     printf 'release workflow missing %s\n' "$pattern" >&2
     exit 1
   fi
