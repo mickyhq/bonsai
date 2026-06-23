@@ -21,10 +21,6 @@
 - Add `--quiet` for scripts that only care about exit code and output file.
 - Add shell completions for bash, zsh, and fish.
 
-## Agent And Editor Integrations
-
-- Add plugin smoke tests that verify generated agent instructions mention current flags.
-
 ## Testing And Release
 
 - Add integration tests for incremental mode with deleted files and changed include/exclude filters.

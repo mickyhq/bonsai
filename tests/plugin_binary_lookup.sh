@@ -19,6 +19,27 @@ for version_file in "${plugin_version_files[@]}"; do
   fi
 done
 
+plugin_instruction_files=(
+  "$repo_root/plugins/bonsai/skills/bonsai/SKILL.md"
+  "$repo_root/claude/bonsai/skills/bonsai/SKILL.md"
+)
+
+for instruction_file in "${plugin_instruction_files[@]}"; do
+  for pattern in \
+    '<max-tokens>' \
+    '<level>' \
+    '<output-file>' \
+    '[bonsai-options...]' \
+    '--exclude' \
+    '--format json'
+  do
+    if ! grep -Fq -- "$pattern" "$instruction_file"; then
+      printf '%s missing agent instruction flag %s\n' "$instruction_file" "$pattern" >&2
+      exit 1
+    fi
+  done
+done
+
 make_fake_bonsai() {
   local path="$1"
   local marker="$2"
