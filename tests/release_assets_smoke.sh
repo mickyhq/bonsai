@@ -24,11 +24,9 @@ workflow_patterns=(
   'dist/bonsai-${{ matrix.name }}'
   'dist/bonsai-${{ matrix.name }}.sha256'
   'Smoke packaged binary'
-  '--incremental --output-file "$tmp_repo/first.xml"'
-  '--incremental --output-file "$tmp_repo/second.xml"'
-  'packaged binary incremental run included unchanged file'
+  'bash tests/release_binary_incremental_smoke.sh "dist/bonsai-${{ matrix.name }}"'
   'Smoke downloaded Linux binary'
-  'downloaded binary incremental run included unchanged file'
+  'bash tests/release_binary_incremental_smoke.sh dist/bonsai-linux-x64'
   'copilot/bonsai-vscode/bonsai-vscode-*.vsix'
   'files: dist/*'
 )

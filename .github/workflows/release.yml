@@ -38,21 +38,7 @@ jobs:
           chmod +x "dist/bonsai-${{ matrix.name }}"
           shasum -a 256 "dist/bonsai-${{ matrix.name }}" > "dist/bonsai-${{ matrix.name }}.sha256"
       - name: Smoke packaged binary
-        run: |
-          tmp_repo="$(mktemp -d)"
-          mkdir -p "$tmp_repo/src"
-          cat > "$tmp_repo/src/lib.rs" <<'RS'
-          pub fn greet() -> &'static str {
-              "hello"
-          }
-          RS
-          "dist/bonsai-${{ matrix.name }}" "$tmp_repo" --incremental --output-file "$tmp_repo/first.xml"
-          grep -Fq 'path="src/lib.rs"' "$tmp_repo/first.xml"
-          "dist/bonsai-${{ matrix.name }}" "$tmp_repo" --incremental --output-file "$tmp_repo/second.xml"
-          if grep -Fq 'path="src/lib.rs"' "$tmp_repo/second.xml"; then
-            printf 'packaged binary incremental run included unchanged file\n' >&2
-            exit 1
-          fi
+        run: bash tests/release_binary_incremental_smoke.sh "dist/bonsai-${{ matrix.name }}"
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
@@ -93,6 +79,7 @@ jobs:
       - binaries
       - vsix
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -100,20 +87,7 @@ jobs:
       - name: Smoke downloaded Linux binary
         run: |
           chmod +x dist/bonsai-linux-x64
-          tmp_repo="$(mktemp -d)"
-          mkdir -p "$tmp_repo/src"
-          cat > "$tmp_repo/src/lib.rs" <<'RS'
-          pub fn greet() -> &'static str {
-              "hello"
-          }
-          RS
-          dist/bonsai-linux-x64 "$tmp_repo" --incremental --output-file "$tmp_repo/first.xml"
-          grep -Fq 'path="src/lib.rs"' "$tmp_repo/first.xml"
-          dist/bonsai-linux-x64 "$tmp_repo" --incremental --output-file "$tmp_repo/second.xml"
-          if grep -Fq 'path="src/lib.rs"' "$tmp_repo/second.xml"; then
-            printf 'downloaded binary incremental run included unchanged file\n' >&2
-            exit 1
-          fi
+          bash tests/release_binary_incremental_smoke.sh dist/bonsai-linux-x64
       - name: Write release notes
         run: |
           cat > release-notes.md <<'NOTES'
