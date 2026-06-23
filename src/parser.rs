@@ -521,6 +521,7 @@ fn compact_markdown_context(source: &str) -> String {
     let mut in_kept_fence = false;
     let mut kept_fence_lines = 0usize;
     let mut in_dropped_fence = false;
+    let mut table_lines = 0usize;
 
     for line in source.lines() {
         let trimmed = line.trim();
@@ -532,6 +533,7 @@ fn compact_markdown_context(source: &str) -> String {
                 continue;
             }
             if in_dropped_fence {
+                output.push(trimmed.to_owned());
                 in_dropped_fence = false;
                 continue;
             }
@@ -541,6 +543,8 @@ fn compact_markdown_context(source: &str) -> String {
                 in_kept_fence = true;
                 kept_fence_lines = 0;
             } else {
+                output.push(trimmed.to_owned());
+                output.push("...".to_owned());
                 in_dropped_fence = true;
             }
             continue;
@@ -560,6 +564,17 @@ fn compact_markdown_context(source: &str) -> String {
             continue;
         }
 
+        if is_markdown_table_line(trimmed) {
+            if table_lines < 24 {
+                output.push(truncate_line(trimmed.to_owned(), 240));
+            } else if table_lines == 24 {
+                output.push("...".to_owned());
+            }
+            table_lines += 1;
+            continue;
+        }
+        table_lines = 0;
+
         if trimmed.starts_with('#') {
             output.push(truncate_line(trimmed.to_owned(), 240));
             keep_after_heading = 2;
@@ -573,6 +588,11 @@ fn compact_markdown_context(source: &str) -> String {
         }
 
         if is_important_markdown_list_item(trimmed) {
+            output.push(truncate_line(trimmed.to_owned(), 240));
+            continue;
+        }
+
+        if has_markdown_link(trimmed) {
             output.push(truncate_line(trimmed.to_owned(), 240));
         }
     }
@@ -623,8 +643,7 @@ fn is_noisy_markdown_line(line: &str) -> bool {
         || line.contains("img.shields.io")
         || line.contains("<img ")
         || line.starts_with("<p align=")
-        || (line.starts_with('|') && line.ends_with('|'))
-        || line.chars().all(|ch| matches!(ch, '-' | ':' | '|' | ' '))
+        || (is_markdown_table_separator(line) && !line.contains('|'))
 }
 
 fn is_summary_markdown_line(line: &str) -> bool {
@@ -638,6 +657,20 @@ fn is_important_markdown_list_item(line: &str) -> bool {
     (line.starts_with("- ") || line.starts_with("* "))
         && !line.contains("badge")
         && line.chars().count() <= 240
+}
+
+fn is_markdown_table_line(line: &str) -> bool {
+    line.starts_with('|') && line.ends_with('|') && line.matches('|').count() >= 2
+}
+
+fn is_markdown_table_separator(line: &str) -> bool {
+    is_markdown_table_line(line) && line.chars().all(|ch| matches!(ch, '|' | '-' | ':' | ' '))
+}
+
+fn has_markdown_link(line: &str) -> bool {
+    let has_inline_link = line.contains("](") && line.contains('[');
+    let has_reference_link = line.starts_with('[') && line.contains("]:");
+    has_inline_link || has_reference_link
 }
 
 fn compact_config_lines(source: &str, max_lines: usize) -> String {
@@ -1114,13 +1147,18 @@ const title = 'Hello'
             "md",
             r#"
 <p align="center"><img src="badge.png" /></p>
-| noisy | table |
+| command | purpose |
 | ----- | ----- |
+| `bonsai .` | build context |
 
 # Bonsai
 
 Useful summary text.
 More summary.
+
+See the [schema](docs/output-schema.md).
+
+[reference]: https://example.com/reference
 
 ```sh
 bonsai .
@@ -1136,11 +1174,19 @@ graph TD
 
         assert!(variants.skeleton.contains("# Bonsai"));
         assert!(variants.skeleton.contains("Useful summary text."));
+        assert!(variants.skeleton.contains("| command | purpose |"));
+        assert!(variants.skeleton.contains("| `bonsai .` | build context |"));
+        assert!(variants
+            .skeleton
+            .contains("[schema](docs/output-schema.md)"));
+        assert!(variants
+            .skeleton
+            .contains("[reference]: https://example.com/reference"));
         assert!(variants.skeleton.contains("```sh"));
         assert!(variants.skeleton.contains("bonsai ."));
+        assert!(variants.skeleton.contains("```mermaid"));
         assert!(!variants.skeleton.contains("<img"));
-        assert!(!variants.skeleton.contains("noisy | table"));
-        assert!(!variants.skeleton.contains("mermaid"));
+        assert!(!variants.skeleton.contains("graph TD"));
     }
 
     #[test]

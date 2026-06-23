@@ -5,7 +5,6 @@
 
 ## Parser Coverage
 
-- Improve Markdown compression to preserve tables, links, and code fence language names.
 - Improve JSON/YAML/TOML compression to keep top-level comments where supported.
 
 ## CLI Ergonomics
