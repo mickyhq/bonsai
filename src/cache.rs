@@ -24,6 +24,13 @@ struct CacheEntry {
     variants: FileVariants,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheStatus {
+    Added,
+    Changed,
+    Unchanged,
+}
+
 impl ParseCache {
     pub fn load(path: PathBuf) -> Self {
         let entries = fs::read(&path)
@@ -43,7 +50,45 @@ impl ParseCache {
         let key = cache_key(path);
         self.touched.insert(key.clone());
 
-        let entry = self.entries.get(&key)?;
+        self.get_by_key(&key, metadata)
+    }
+
+    pub fn status(&self, path: &Path, metadata: &Metadata) -> CacheStatus {
+        let key = cache_key(path);
+        match self.entries.get(&key) {
+            None => CacheStatus::Added,
+            Some(entry)
+                if entry.size == metadata.len() && entry.modified_ns == modified_ns(metadata) =>
+            {
+                CacheStatus::Unchanged
+            }
+            Some(_) => CacheStatus::Changed,
+        }
+    }
+
+    pub fn deleted_count(&self) -> usize {
+        self.entries
+            .keys()
+            .filter(|path| !Path::new(path.as_str()).exists())
+            .count()
+    }
+
+    pub fn load_required(path: PathBuf) -> Result<Self> {
+        let bytes = fs::read(&path)
+            .with_context(|| format!("cannot read incremental base cache {}", path.display()))?;
+        let entries = parse_cache_bytes(&bytes)
+            .with_context(|| format!("invalid incremental base cache {}", path.display()))?;
+
+        Ok(Self {
+            path,
+            entries,
+            touched: HashSet::new(),
+            dirty: false,
+        })
+    }
+
+    fn get_by_key(&self, key: &str, metadata: &Metadata) -> Option<FileVariants> {
+        let entry = self.entries.get(key)?;
         if entry.size == metadata.len() && entry.modified_ns == modified_ns(metadata) {
             return Some(entry.variants.clone());
         }

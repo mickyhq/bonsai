@@ -119,6 +119,36 @@ if grep -Fq 'path="Cargo.toml"' "$tmp_root/incremental-third.xml"; then
   exit 1
 fi
 
+incremental_base="$tmp_root/incremental-base"
+incremental_current="$tmp_root/incremental-current"
+make_golden_repo "$incremental_base"
+make_golden_repo "$incremental_current"
+"$bin" "$incremental_current" --incremental-base "$incremental_base" --output-file "$tmp_root/incremental-base-same.xml"
+if grep -Fq 'path="Cargo.toml"' "$tmp_root/incremental-base-same.xml" || grep -Fq 'path="src/lib.rs"' "$tmp_root/incremental-base-same.xml"; then
+  printf 'matching incremental base included files\n' >&2
+  exit 1
+fi
+
+cat >> "$incremental_current/src/lib.rs" <<'RS'
+
+pub fn changed() {}
+RS
+"$bin" "$incremental_current" --incremental-base "$incremental_base" --output-file "$tmp_root/incremental-base-changed.xml"
+grep -Fq 'path="src/lib.rs"' "$tmp_root/incremental-base-changed.xml"
+if grep -Fq 'path="Cargo.toml"' "$tmp_root/incremental-base-changed.xml"; then
+  printf 'incremental base included unchanged manifest\n' >&2
+  exit 1
+fi
+
+rm "$incremental_current/Cargo.toml"
+"$bin" "$incremental_current" --incremental-base "$incremental_base" --incremental-summary --output-file "$tmp_root/incremental-summary.xml" > "$tmp_root/incremental-summary.txt"
+grep -Fq 'incremental_summary:' "$tmp_root/incremental-summary.txt"
+grep -Fq '  added: 0' "$tmp_root/incremental-summary.txt"
+grep -Fq '  changed: 1' "$tmp_root/incremental-summary.txt"
+grep -Fq '  unchanged: 0' "$tmp_root/incremental-summary.txt"
+grep -Fq '  skipped: 0' "$tmp_root/incremental-summary.txt"
+grep -Fq '  deleted: 1' "$tmp_root/incremental-summary.txt"
+
 empty_repo="$tmp_root/empty-repo"
 mkdir -p "$empty_repo"
 if "$bin" "$empty_repo" --fail-on-empty --output-file "$tmp_root/empty.xml" >/dev/null 2>&1; then

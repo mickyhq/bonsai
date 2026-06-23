@@ -4,7 +4,7 @@ mod formatter;
 mod parser;
 mod walker;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -17,7 +17,7 @@ use budget::{
     count_text_tokens, downgrade_largest_file, file_priority_score, optimize_budget, ProcessedFile,
     TokenCounter, TokenizerKind,
 };
-use cache::{cache_path_for_root, ParseCache};
+use cache::{cache_path_for_root, CacheStatus, ParseCache};
 use formatter::{
     format_repository_context_json, format_repository_context_xml, DirectorySummary, FormatOptions,
     RepositoryMetadata,
@@ -84,6 +84,19 @@ struct Cli {
     )]
     incremental: bool,
 
+    #[arg(
+        long,
+        value_name = "PATH",
+        help = "Only include files added or changed compared with a base directory or cache file"
+    )]
+    incremental_base: Option<PathBuf>,
+
+    #[arg(
+        long,
+        help = "Print added, changed, unchanged, skipped, and deleted counts"
+    )]
+    incremental_summary: bool,
+
     #[arg(long, value_name = "GLOB")]
     include: Vec<String>,
 
@@ -145,6 +158,7 @@ fn main() -> Result<()> {
     let requested_level = CompressionLevel::try_from(cli.level)?;
     let token_counter = TokenCounter::new(cli.tokenizer)?;
     let mut parse_cache = ParseCache::load(cache_path_for_root(&root));
+    let incremental_base = load_incremental_base(&cli)?;
 
     let paths = collect_code_files(
         &root,
@@ -163,6 +177,8 @@ fn main() -> Result<()> {
         print_selected_files(&root, &paths);
     }
 
+    let current_relative_paths = relative_path_set(&root, &paths);
+    let mut incremental_counts = IncrementalCounts::default();
     let mut files = Vec::with_capacity(paths.len());
 
     for path in paths {
@@ -174,8 +190,16 @@ fn main() -> Result<()> {
 
         let file_metadata = fs::metadata(&path)
             .with_context(|| format!("cannot read metadata for {}", path.display()))?;
+        let delta = classify_file(
+            &incremental_base,
+            &parse_cache,
+            &path,
+            &relative_path,
+            &file_metadata,
+        )?;
         let cached_variants = parse_cache.get(&path, &file_metadata);
-        let include_file = !cli.incremental || cached_variants.is_none();
+        let include_file = should_include_delta(&cli, &incremental_base, delta);
+        incremental_counts.record(delta, include_file);
         let variants = match cached_variants {
             Some(variants) => variants,
             None => {
@@ -192,6 +216,12 @@ fn main() -> Result<()> {
 
         files.push(ProcessedFile::new(relative_path, requested_level, variants));
     }
+    incremental_counts.deleted = deleted_count(
+        &cli,
+        &incremental_base,
+        &parse_cache,
+        &current_relative_paths,
+    )?;
     parse_cache.retain_touched();
 
     let raw_context = if cli.stats {
@@ -265,6 +295,10 @@ fn main() -> Result<()> {
 
     if cli.summary {
         print_summary(&run_stats);
+    }
+
+    if cli.incremental_summary {
+        print_incremental_summary(&incremental_counts);
     }
 
     if cli.stats {
@@ -387,6 +421,168 @@ fn max_file_bytes(cli: &Cli) -> Option<u64> {
         None
     } else {
         Some(cli.max_file_bytes)
+    }
+}
+
+#[derive(Debug)]
+enum IncrementalBase {
+    Directory(PathBuf),
+    Cache(ParseCache),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileDelta {
+    Added,
+    Changed,
+    Unchanged,
+}
+
+#[derive(Debug, Default)]
+struct IncrementalCounts {
+    added: usize,
+    changed: usize,
+    unchanged: usize,
+    skipped: usize,
+    deleted: usize,
+}
+
+impl IncrementalCounts {
+    fn record(&mut self, delta: FileDelta, included: bool) {
+        match delta {
+            FileDelta::Added => self.added += 1,
+            FileDelta::Changed => self.changed += 1,
+            FileDelta::Unchanged => self.unchanged += 1,
+        }
+
+        if !included {
+            self.skipped += 1;
+        }
+    }
+}
+
+fn load_incremental_base(cli: &Cli) -> Result<Option<IncrementalBase>> {
+    let Some(path) = &cli.incremental_base else {
+        return Ok(None);
+    };
+
+    if path.is_dir() {
+        let root = fs::canonicalize(path)
+            .with_context(|| format!("cannot resolve incremental base {}", path.display()))?;
+        return Ok(Some(IncrementalBase::Directory(root)));
+    }
+
+    Ok(Some(IncrementalBase::Cache(ParseCache::load_required(
+        path.clone(),
+    )?)))
+}
+
+fn classify_file(
+    incremental_base: &Option<IncrementalBase>,
+    parse_cache: &ParseCache,
+    path: &Path,
+    relative_path: &str,
+    metadata: &fs::Metadata,
+) -> Result<FileDelta> {
+    match incremental_base {
+        Some(IncrementalBase::Directory(base_root)) => {
+            let base_path = base_root.join(relative_path);
+            directory_file_delta(&base_path, path, metadata)
+        }
+        Some(IncrementalBase::Cache(base_cache)) => {
+            Ok(cache_status_to_delta(base_cache.status(path, metadata)))
+        }
+        None => Ok(cache_status_to_delta(parse_cache.status(path, metadata))),
+    }
+}
+
+fn should_include_delta(
+    cli: &Cli,
+    incremental_base: &Option<IncrementalBase>,
+    delta: FileDelta,
+) -> bool {
+    if cli.incremental || incremental_base.is_some() {
+        delta != FileDelta::Unchanged
+    } else {
+        true
+    }
+}
+
+fn directory_file_delta(
+    base_path: &Path,
+    path: &Path,
+    metadata: &fs::Metadata,
+) -> Result<FileDelta> {
+    if !base_path.exists() {
+        return Ok(FileDelta::Added);
+    }
+
+    if same_file_contents(base_path, path, metadata)? {
+        Ok(FileDelta::Unchanged)
+    } else {
+        Ok(FileDelta::Changed)
+    }
+}
+
+fn same_file_contents(base_path: &Path, path: &Path, metadata: &fs::Metadata) -> Result<bool> {
+    let Ok(base_metadata) = fs::metadata(base_path) else {
+        return Ok(false);
+    };
+
+    if !base_metadata.is_file() || base_metadata.len() != metadata.len() {
+        return Ok(false);
+    }
+
+    let base_bytes = fs::read(base_path)
+        .with_context(|| format!("cannot read incremental base file {}", base_path.display()))?;
+    let current_bytes =
+        fs::read(path).with_context(|| format!("cannot read source file {}", path.display()))?;
+    Ok(base_bytes == current_bytes)
+}
+
+fn cache_status_to_delta(status: CacheStatus) -> FileDelta {
+    match status {
+        CacheStatus::Added => FileDelta::Added,
+        CacheStatus::Changed => FileDelta::Changed,
+        CacheStatus::Unchanged => FileDelta::Unchanged,
+    }
+}
+
+fn relative_path_set(root: &Path, paths: &[PathBuf]) -> HashSet<String> {
+    paths
+        .iter()
+        .map(|path| {
+            path.strip_prefix(root)
+                .unwrap_or(path)
+                .to_string_lossy()
+                .replace('\\', "/")
+        })
+        .collect()
+}
+
+fn deleted_count(
+    cli: &Cli,
+    incremental_base: &Option<IncrementalBase>,
+    parse_cache: &ParseCache,
+    current_relative_paths: &HashSet<String>,
+) -> Result<usize> {
+    match incremental_base {
+        Some(IncrementalBase::Directory(base_root)) => {
+            let base_paths = collect_code_files(
+                base_root,
+                &WalkerOptions {
+                    include: cli.include.clone(),
+                    exclude: cli.exclude.clone(),
+                    respect_gitignore: cli.respect_gitignore,
+                    max_file_bytes: max_file_bytes(cli),
+                },
+            )?;
+            Ok(relative_path_set(base_root, &base_paths)
+                .difference(current_relative_paths)
+                .count())
+        }
+        Some(IncrementalBase::Cache(base_cache)) => Ok(base_cache.deleted_count()),
+        None if cli.incremental => Ok(parse_cache.deleted_count()),
+        None => Ok(0),
     }
 }
 
@@ -643,6 +839,15 @@ fn print_stats(stats: &RunStats) {
     println!("  files_scanned: {}", stats.files_scanned);
 }
 
+fn print_incremental_summary(counts: &IncrementalCounts) {
+    println!("incremental_summary:");
+    println!("  added: {}", counts.added);
+    println!("  changed: {}", counts.changed);
+    println!("  unchanged: {}", counts.unchanged);
+    println!("  skipped: {}", counts.skipped);
+    println!("  deleted: {}", counts.deleted);
+}
+
 fn print_detailed_stats(files: &[ProcessedFile], _stats: &RunStats) {
     println!("detailed_stats:");
     println!("  files_reported: {}", files.len());
@@ -747,6 +952,8 @@ mod tests {
             directory_summaries: false,
             fail_over_budget: false,
             incremental: false,
+            incremental_base: None,
+            incremental_summary: false,
             include: Vec::new(),
             exclude: Vec::new(),
             respect_gitignore: true,

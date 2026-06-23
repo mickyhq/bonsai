@@ -241,6 +241,19 @@ Only include files changed since the last cached local run:
 bonsai . --incremental
 ```
 
+Only include files changed compared with another checkout or cache file:
+
+```sh
+bonsai . --incremental-base /path/to/base/repo
+bonsai . --incremental-base /path/to/base.cache
+```
+
+Print incremental counts:
+
+```sh
+bonsai . --incremental --incremental-summary
+```
+
 Write starter agent instructions:
 
 ```sh
