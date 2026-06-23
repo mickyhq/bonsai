@@ -1,9 +1,5 @@
 # TODO
 
-## CLI Ergonomics
-
-- Convert `doctor`, `cache`, `init-agent`, and `completions` to real Clap subcommands.
-
 ## Change Workflows
 
 - Add untracked-file support for `--changed-since` branch review workflows.

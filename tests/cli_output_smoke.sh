@@ -95,6 +95,11 @@ grep -Fq 'init-agent' "$tmp_root/bonsai.bash"
 grep -Fq 'completions' "$tmp_root/_bonsai"
 grep -Fq 'dry-run' "$tmp_root/bonsai.fish"
 
+"$bin" --help > "$tmp_root/help.txt"
+grep -Fq 'Commands:' "$tmp_root/help.txt"
+grep -Fq 'init-agent' "$tmp_root/help.txt"
+grep -Fq 'completions' "$tmp_root/help.txt"
+
 "$bin" doctor "$repo" --tokenizer cl100k_base > "$tmp_root/doctor.txt"
 grep -Fq 'bonsai doctor:' "$tmp_root/doctor.txt"
 grep -Fq '  binary:' "$tmp_root/doctor.txt"

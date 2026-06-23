@@ -12,7 +12,7 @@ use std::process::Command as ProcessCommand;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
-use clap::{Arg, ArgAction, Command as ClapCommand, CommandFactory, Parser, ValueEnum};
+use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 use sha2::{Digest, Sha256};
 
@@ -151,6 +151,72 @@ struct Cli {
 
     #[arg(long, value_name = "TEXT")]
     ask_template: Option<String>,
+
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Debug, Subcommand)]
+enum Commands {
+    #[command(about = "Write AGENTS.md and CLAUDE.md starter instructions")]
+    InitAgent {
+        #[arg(default_value = ".")]
+        path: PathBuf,
+
+        #[arg(long, short)]
+        force: bool,
+    },
+
+    #[command(about = "Manage Bonsai cache")]
+    Cache {
+        #[command(subcommand)]
+        command: CacheCommands,
+    },
+
+    #[command(about = "Show install health")]
+    Doctor {
+        #[arg(default_value = ".")]
+        path: PathBuf,
+
+        #[arg(
+            long,
+            default_value_t = TokenizerKind::default(),
+            value_name = "TOKENIZER"
+        )]
+        tokenizer: TokenizerKind,
+
+        #[arg(long)]
+        json: bool,
+    },
+
+    #[command(about = "Generate shell completions")]
+    Completions { shell: CompletionShell },
+}
+
+#[derive(Debug, Subcommand)]
+enum CacheCommands {
+    #[command(about = "Clear the local parse cache for a repo")]
+    Clear {
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum CompletionShell {
+    Bash,
+    Zsh,
+    Fish,
+}
+
+impl CompletionShell {
+    fn as_clap_shell(self) -> Shell {
+        match self {
+            CompletionShell::Bash => Shell::Bash,
+            CompletionShell::Zsh => Shell::Zsh,
+            CompletionShell::Fish => Shell::Fish,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -173,20 +239,12 @@ enum SortMode {
 }
 
 fn main() -> Result<()> {
-    if handle_init_agent_command()? {
-        return Ok(());
-    }
-    if handle_cache_command()? {
-        return Ok(());
-    }
-    if handle_doctor_command()? {
-        return Ok(());
-    }
-    if handle_completions_command()? {
+    let cli = Cli::parse();
+    if let Some(command) = &cli.command {
+        handle_command(command)?;
         return Ok(());
     }
 
-    let cli = Cli::parse();
     validate_delta_options(&cli)?;
     let root = fs::canonicalize(&cli.path)
         .with_context(|| format!("cannot resolve target path {}", cli.path.display()))?;
@@ -378,189 +436,28 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn handle_init_agent_command() -> Result<bool> {
-    let args = env::args().collect::<Vec<_>>();
-    if args.get(1).map(String::as_str) != Some("init-agent") {
-        return Ok(false);
-    }
-
-    let mut target = PathBuf::from(".");
-    let mut force = false;
-    let mut saw_path = false;
-
-    for arg in args.iter().skip(2) {
-        match arg.as_str() {
-            "--force" | "-f" => force = true,
-            "--help" | "-h" => {
-                println!("Usage: bonsai init-agent [PATH] [--force]");
-                return Ok(true);
-            }
-            value if value.starts_with('-') => bail!("unknown init-agent option {value}"),
-            value => {
-                if saw_path {
-                    bail!("init-agent accepts only one path");
-                }
-                target = PathBuf::from(value);
-                saw_path = true;
-            }
+fn handle_command(command: &Commands) -> Result<()> {
+    match command {
+        Commands::InitAgent { path, force } => init_agent_files(path, *force),
+        Commands::Cache { command } => match command {
+            CacheCommands::Clear { path } => clear_cache(path),
+        },
+        Commands::Doctor {
+            path,
+            tokenizer,
+            json,
+        } => print_doctor(path, *tokenizer, *json),
+        Commands::Completions { shell } => {
+            let mut command = Cli::command();
+            generate(
+                shell.as_clap_shell(),
+                &mut command,
+                "bonsai",
+                &mut std::io::stdout(),
+            );
+            Ok(())
         }
     }
-
-    init_agent_files(&target, force)?;
-    Ok(true)
-}
-
-fn handle_cache_command() -> Result<bool> {
-    let args = env::args().collect::<Vec<_>>();
-    if args.get(1).map(String::as_str) != Some("cache") {
-        return Ok(false);
-    }
-
-    match args.get(2).map(String::as_str) {
-        Some("clear") => {
-            let target = cache_command_target(&args[3..])?;
-            clear_cache(&target)?;
-            Ok(true)
-        }
-        Some("--help") | Some("-h") | None => {
-            println!("Usage: bonsai cache clear [PATH]");
-            Ok(true)
-        }
-        Some(command) => bail!("unknown cache command {command}"),
-    }
-}
-
-fn handle_doctor_command() -> Result<bool> {
-    let args = env::args().collect::<Vec<_>>();
-    if args.get(1).map(String::as_str) != Some("doctor") {
-        return Ok(false);
-    }
-
-    let options = doctor_options(&args[2..])?;
-    print_doctor(&options.target, options.tokenizer, options.json)?;
-    Ok(true)
-}
-
-fn handle_completions_command() -> Result<bool> {
-    let args = env::args().collect::<Vec<_>>();
-    if args.get(1).map(String::as_str) != Some("completions") {
-        return Ok(false);
-    }
-
-    let Some(shell) = args.get(2) else {
-        println!("Usage: bonsai completions <bash|zsh|fish>");
-        return Ok(true);
-    };
-
-    if matches!(shell.as_str(), "--help" | "-h") {
-        println!("Usage: bonsai completions <bash|zsh|fish>");
-        return Ok(true);
-    }
-
-    if args.len() > 3 {
-        bail!("completions accepts only one shell");
-    }
-
-    let shell = completion_shell(shell)?;
-    let mut command = completion_command();
-    generate(shell, &mut command, "bonsai", &mut std::io::stdout());
-    Ok(true)
-}
-
-fn completion_shell(value: &str) -> Result<Shell> {
-    match value {
-        "bash" => Ok(Shell::Bash),
-        "zsh" => Ok(Shell::Zsh),
-        "fish" => Ok(Shell::Fish),
-        other => bail!("unsupported shell {other}; use bash, zsh, or fish"),
-    }
-}
-
-fn completion_command() -> ClapCommand {
-    Cli::command()
-        .subcommand(
-            ClapCommand::new("init-agent")
-                .about("Write AGENTS.md and CLAUDE.md starter instructions")
-                .arg(Arg::new("path").default_value("."))
-                .arg(
-                    Arg::new("force")
-                        .long("force")
-                        .short('f')
-                        .action(ArgAction::SetTrue),
-                ),
-        )
-        .subcommand(
-            ClapCommand::new("cache")
-                .about("Manage Bonsai cache")
-                .subcommand(
-                    ClapCommand::new("clear")
-                        .about("Clear the local parse cache for a repo")
-                        .arg(Arg::new("path").default_value(".")),
-                ),
-        )
-        .subcommand(
-            ClapCommand::new("doctor")
-                .about("Show install health")
-                .arg(Arg::new("path").default_value("."))
-                .arg(Arg::new("json").long("json").action(ArgAction::SetTrue))
-                .arg(
-                    Arg::new("tokenizer")
-                        .long("tokenizer")
-                        .value_name("TOKENIZER")
-                        .default_value(TokenizerKind::default().as_str()),
-                ),
-        )
-        .subcommand(
-            ClapCommand::new("completions")
-                .about("Generate shell completions")
-                .arg(Arg::new("shell").value_parser(["bash", "zsh", "fish"])),
-        )
-}
-
-struct DoctorOptions {
-    target: PathBuf,
-    tokenizer: TokenizerKind,
-    json: bool,
-}
-
-fn doctor_options(args: &[String]) -> Result<DoctorOptions> {
-    let mut target = PathBuf::from(".");
-    let mut tokenizer = TokenizerKind::default();
-    let mut json = false;
-    let mut saw_path = false;
-    let mut index = 0;
-
-    while index < args.len() {
-        match args[index].as_str() {
-            "--help" | "-h" => {
-                println!("Usage: bonsai doctor [PATH] [--tokenizer TOKENIZER] [--json]");
-                std::process::exit(0);
-            }
-            "--json" => json = true,
-            "--tokenizer" => {
-                index += 1;
-                let Some(value) = args.get(index) else {
-                    bail!("--tokenizer requires a value");
-                };
-                tokenizer = value.parse::<TokenizerKind>().map_err(anyhow::Error::msg)?;
-            }
-            value if value.starts_with('-') => bail!("unknown doctor option {value}"),
-            value => {
-                if saw_path {
-                    bail!("doctor accepts only one path");
-                }
-                target = PathBuf::from(value);
-                saw_path = true;
-            }
-        }
-        index += 1;
-    }
-
-    Ok(DoctorOptions {
-        target,
-        tokenizer,
-        json,
-    })
 }
 
 #[derive(Debug)]
@@ -803,30 +700,6 @@ fn push_json_escaped(output: &mut String, value: &str) {
             _ => output.push(ch),
         }
     }
-}
-
-fn cache_command_target(args: &[String]) -> Result<PathBuf> {
-    let mut target = PathBuf::from(".");
-    let mut saw_path = false;
-
-    for arg in args {
-        match arg.as_str() {
-            "--help" | "-h" => {
-                println!("Usage: bonsai cache clear [PATH]");
-                std::process::exit(0);
-            }
-            value if value.starts_with('-') => bail!("unknown cache clear option {value}"),
-            value => {
-                if saw_path {
-                    bail!("cache clear accepts only one path");
-                }
-                target = PathBuf::from(value);
-                saw_path = true;
-            }
-        }
-    }
-
-    Ok(target)
 }
 
 fn clear_cache(target: &Path) -> Result<()> {
@@ -1652,6 +1525,7 @@ mod tests {
 
     fn test_cli(format: OutputFormat) -> Cli {
         Cli {
+            command: None,
             path: PathBuf::from("."),
             max_tokens: 12000,
             tokenizer: TokenizerKind::default(),
