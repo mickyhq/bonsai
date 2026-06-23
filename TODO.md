@@ -2,7 +2,6 @@
 
 ## Token Cost Improvements
 
-- Make Markdown/config/web truncation token-aware instead of character-aware.
 - Add Markdown long-list sampling, like table sampling: keep first items plus tail items.
 - Add config allowlist tuning for common files: `package.json`, GitHub workflows, `Cargo.toml`, plugin manifests, VS Code manifests.
 - Add per-file `--max-file-tokens` to cap huge single files before global budget optimization.

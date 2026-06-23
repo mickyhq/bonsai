@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use anyhow::{anyhow, bail, Context, Result};
+use tiktoken_rs::{cl100k_base, CoreBPE};
 use tree_sitter::{Language, Node, Parser};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -19,6 +21,7 @@ pub struct FileVariants {
 }
 
 const IMPORT_BLOCK_KEEP: usize = 5;
+const CONTEXT_LINE_TOKEN_LIMIT: usize = 80;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParserMode {
@@ -638,7 +641,7 @@ fn build_text_tree_map(path: &Path, source: &str) -> String {
                 .lines()
                 .map(str::trim)
                 .filter(|line| line.starts_with('#'))
-                .map(|line| truncate_line(line.to_owned(), 240))
+                .map(|line| truncate_context_line(line.to_owned()))
                 .take(120)
                 .collect::<Vec<_>>();
 
@@ -784,7 +787,7 @@ fn compact_web_context(source: &str, max_lines: usize) -> String {
         .map(str::trim)
         .filter(|line| !line.is_empty())
         .filter(|line| !line.starts_with("<!--") && !line.starts_with("//"))
-        .map(|line| truncate_line(line.to_owned(), 240))
+        .map(|line| truncate_context_line(line.to_owned()))
         .take(max_lines)
         .collect::<Vec<_>>()
         .join("\n")
@@ -828,7 +831,7 @@ fn compact_markdown_context(source: &str) -> String {
 
         if in_kept_fence {
             if kept_fence_lines < 24 {
-                output.push(truncate_line(trimmed.to_owned(), 240));
+                output.push(truncate_context_line(trimmed.to_owned()));
             } else if kept_fence_lines == 24 {
                 output.push("...".to_owned());
             }
@@ -842,30 +845,30 @@ fn compact_markdown_context(source: &str) -> String {
         }
 
         if is_markdown_table_line(trimmed) {
-            table_buffer.push(truncate_line(trimmed.to_owned(), 240));
+            table_buffer.push(truncate_context_line(trimmed.to_owned()));
             continue;
         }
         flush_markdown_table(&mut output, &mut table_buffer);
 
         if trimmed.starts_with('#') {
-            output.push(truncate_line(trimmed.to_owned(), 240));
+            output.push(truncate_context_line(trimmed.to_owned()));
             keep_after_heading = 2;
             continue;
         }
 
         if keep_after_heading > 0 && is_summary_markdown_line(trimmed) {
-            output.push(truncate_line(trimmed.to_owned(), 240));
+            output.push(truncate_context_line(trimmed.to_owned()));
             keep_after_heading -= 1;
             continue;
         }
 
         if is_important_markdown_list_item(trimmed) {
-            output.push(truncate_line(trimmed.to_owned(), 240));
+            output.push(truncate_context_line(trimmed.to_owned()));
             continue;
         }
 
         if has_markdown_link(trimmed) {
-            output.push(truncate_line(trimmed.to_owned(), 240));
+            output.push(truncate_context_line(trimmed.to_owned()));
         }
     }
     flush_markdown_table(&mut output, &mut table_buffer);
@@ -983,7 +986,7 @@ fn compact_config_lines(path: &Path, source: &str, max_lines: usize) -> String {
     for raw_line in source.lines() {
         let line = raw_line.trim();
         if is_top_level_config_comment(path, raw_line) {
-            output.push(truncate_line(line.to_owned(), 240));
+            output.push(truncate_context_line(line.to_owned()));
             if output.len() >= max_lines {
                 break;
             }
@@ -1028,7 +1031,7 @@ fn compact_config_lines(path: &Path, source: &str, max_lines: usize) -> String {
             && !in_unimportant_section
             && (!is_toml_table_line(line) || keep_nested);
         if top_level || keep_nested || kept_array_items > 0 {
-            output.push(truncate_line(line.to_owned(), 240));
+            output.push(truncate_context_line(line.to_owned()));
         }
 
         open_config_section(path, line, indent, keep_nested, &mut sections);
@@ -1218,7 +1221,7 @@ fn compact_non_empty_lines(source: &str, max_lines: usize) -> String {
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty())
-        .map(|line| truncate_line(line.to_owned(), 240))
+        .map(|line| truncate_context_line(line.to_owned()))
         .take(max_lines)
         .collect::<Vec<_>>()
         .join("\n")
@@ -1239,6 +1242,47 @@ fn compact_node_line(source: &str, node: Node) -> Option<String> {
     line = truncate_line(line, 240);
 
     (!line.is_empty()).then_some(line)
+}
+
+fn truncate_context_line(line: String) -> String {
+    truncate_line_tokens(line, CONTEXT_LINE_TOKEN_LIMIT)
+}
+
+fn truncate_line_tokens(line: String, max_tokens: usize) -> String {
+    if count_context_tokens(&line) <= max_tokens {
+        return line;
+    }
+
+    let chars = line.chars().collect::<Vec<_>>();
+    let mut low = 0usize;
+    let mut high = chars.len();
+
+    while low < high {
+        let mid = (low + high).div_ceil(2);
+        let candidate = format!("{}...", chars[..mid].iter().collect::<String>().trim_end());
+        if count_context_tokens(&candidate) <= max_tokens {
+            low = mid;
+        } else {
+            high = mid - 1;
+        }
+    }
+
+    let mut truncated = chars[..low].iter().collect::<String>();
+    truncated = truncated.trim_end().to_owned();
+    if truncated.is_empty() {
+        "...".to_owned()
+    } else {
+        format!("{truncated}...")
+    }
+}
+
+fn count_context_tokens(text: &str) -> usize {
+    static TOKENIZER: OnceLock<Option<CoreBPE>> = OnceLock::new();
+    TOKENIZER
+        .get_or_init(|| cl100k_base().ok())
+        .as_ref()
+        .map(|tokenizer| tokenizer.encode_ordinary(text).len())
+        .unwrap_or_else(|| text.chars().count())
 }
 
 fn truncate_line(line: String, max_len: usize) -> String {
@@ -1858,6 +1902,39 @@ graph TD
         assert!(variants.skeleton.contains("| row-17 | value-17 |"));
         assert!(variants.skeleton.contains("| row-20 | value-20 |"));
         assert!(!variants.skeleton.contains("| row-12 | value-12 |"));
+    }
+
+    #[test]
+    fn markdown_config_and_web_truncate_by_tokens() {
+        let long_words = (0..180)
+            .map(|index| format!("token{index}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let md_path = write_temp_source(
+            "md",
+            &format!("# Title\n\n[{long_words}](https://example.com)\n"),
+        );
+        let json_path = write_temp_source(
+            "json",
+            &format!("{{\n  \"description\": \"{long_words}\"\n}}"),
+        );
+        let html_path = write_temp_source(
+            "html",
+            &format!("<meta name=\"description\" content=\"{long_words}\">"),
+        );
+
+        let markdown = compress_file(&md_path, CompressionLevel::Skeleton).unwrap();
+        let json = compress_file(&json_path, CompressionLevel::Skeleton).unwrap();
+        let html = compress_file(&html_path, CompressionLevel::Skeleton).unwrap();
+
+        for output in [&markdown.skeleton, &json.skeleton, &html.skeleton] {
+            let longest_line_tokens = output.lines().map(count_context_tokens).max().unwrap_or(0);
+            assert!(
+                longest_line_tokens <= CONTEXT_LINE_TOKEN_LIMIT,
+                "line exceeded token limit: {output}"
+            );
+            assert!(output.contains("..."), "missing token truncation: {output}");
+        }
     }
 
     #[test]
