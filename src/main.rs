@@ -1,4 +1,5 @@
 mod budget;
+mod cache;
 mod formatter;
 mod parser;
 mod walker;
@@ -14,7 +15,9 @@ use clap::{ArgAction, Parser, ValueEnum};
 
 use budget::{
     count_text_tokens, downgrade_largest_file, file_priority_score, optimize_budget, ProcessedFile,
+    TokenCounter, TokenizerKind,
 };
+use cache::{cache_path_for_root, ParseCache};
 use formatter::{
     format_repository_context_json, format_repository_context_xml, DirectorySummary, FormatOptions,
     RepositoryMetadata,
@@ -32,6 +35,14 @@ struct Cli {
 
     #[arg(long, default_value_t = 4000)]
     max_tokens: usize,
+
+    #[arg(
+        long,
+        default_value_t = TokenizerKind::default(),
+        value_name = "TOKENIZER",
+        help = "Tokenizer family or model alias: o200k_base, cl100k_base, p50k_base, p50k_edit, r50k_base"
+    )]
+    tokenizer: TokenizerKind,
 
     #[arg(
         long,
@@ -66,6 +77,12 @@ struct Cli {
 
     #[arg(long)]
     fail_over_budget: bool,
+
+    #[arg(
+        long,
+        help = "Only include files added or changed since the last cached local run"
+    )]
+    incremental: bool,
 
     #[arg(long, value_name = "GLOB")]
     include: Vec<String>,
@@ -126,6 +143,8 @@ fn main() -> Result<()> {
     let root = fs::canonicalize(&cli.path)
         .with_context(|| format!("cannot resolve target path {}", cli.path.display()))?;
     let requested_level = CompressionLevel::try_from(cli.level)?;
+    let token_counter = TokenCounter::new(cli.tokenizer)?;
+    let mut parse_cache = ParseCache::load(cache_path_for_root(&root));
 
     let paths = collect_code_files(
         &root,
@@ -153,11 +172,27 @@ fn main() -> Result<()> {
             .to_string_lossy()
             .replace('\\', "/");
 
-        let variants = compress_file(&path, requested_level)
-            .with_context(|| format!("failed to parse {}", path.display()))?;
+        let file_metadata = fs::metadata(&path)
+            .with_context(|| format!("cannot read metadata for {}", path.display()))?;
+        let cached_variants = parse_cache.get(&path, &file_metadata);
+        let include_file = !cli.incremental || cached_variants.is_none();
+        let variants = match cached_variants {
+            Some(variants) => variants,
+            None => {
+                let variants = compress_file(&path, requested_level)
+                    .with_context(|| format!("failed to parse {}", path.display()))?;
+                parse_cache.put(&path, &file_metadata, variants.clone());
+                variants
+            }
+        };
+
+        if !include_file {
+            continue;
+        }
 
         files.push(ProcessedFile::new(relative_path, requested_level, variants));
     }
+    parse_cache.retain_touched();
 
     let raw_context = if cli.stats {
         let metadata = RepositoryMetadata {
@@ -167,7 +202,7 @@ fn main() -> Result<()> {
             compression_level: requested_level.as_u8(),
             file_count: files.len(),
         };
-        let mut full_files = full_context_files(&files)?;
+        let mut full_files = full_context_files(&files, &token_counter)?;
         sort_files(&mut full_files, cli.sort);
         Some(maybe_wrap_prompt(
             format_context(&full_files, &metadata, &cli),
@@ -184,10 +219,10 @@ fn main() -> Result<()> {
         compression_level: requested_level.as_u8(),
         file_count: files.len(),
     };
-    let content_budget = reserved_content_budget(&files, &metadata, &cli)?;
-    let optimized = optimize_budget(files, content_budget)?;
+    let content_budget = reserved_content_budget(&files, &metadata, &cli, &token_counter)?;
+    let optimized = optimize_budget(files, content_budget, &token_counter)?;
     let (mut optimized, context, output_tokens) =
-        fit_formatted_context(optimized, &metadata, &cli)?;
+        fit_formatted_context(optimized, &metadata, &cli, &token_counter)?;
     sort_files(&mut optimized, cli.sort);
     let run_stats = RunStats::new(
         &cli,
@@ -195,6 +230,7 @@ fn main() -> Result<()> {
         optimized.len(),
         raw_context.as_deref(),
         output_tokens,
+        &token_counter,
     )?;
 
     if output_tokens > cli.max_tokens {
@@ -221,6 +257,10 @@ fn main() -> Result<()> {
             fs::write(&cli.output_file, context)
                 .with_context(|| format!("cannot write {}", cli.output_file.display()))?;
         }
+    }
+
+    if let Err(error) = parse_cache.save() {
+        eprintln!("warning: cannot write parse cache: {error:#}");
     }
 
     if cli.summary {
@@ -356,6 +396,7 @@ struct RunStats {
     files_scanned: usize,
     selected_level: CompressionLevel,
     max_tokens: usize,
+    tokenizer: TokenizerKind,
     raw_tokens: Option<usize>,
     shrunk_tokens: usize,
     tokens_saved: Option<usize>,
@@ -369,8 +410,9 @@ impl RunStats {
         files_scanned: usize,
         raw_context: Option<&str>,
         shrunk_tokens: usize,
+        counter: &TokenCounter,
     ) -> Result<Self> {
-        let raw_tokens = raw_context.map(count_text_tokens).transpose()?;
+        let raw_tokens = raw_context.map(|context| count_text_tokens(context, counter));
         let tokens_saved = raw_tokens.map(|tokens| tokens.saturating_sub(shrunk_tokens));
         let saving_percent = raw_tokens.map(|tokens| {
             if tokens == 0 {
@@ -385,6 +427,7 @@ impl RunStats {
             files_scanned,
             selected_level,
             max_tokens: cli.max_tokens,
+            tokenizer: counter.tokenizer(),
             raw_tokens,
             shrunk_tokens,
             tokens_saved,
@@ -393,13 +436,16 @@ impl RunStats {
     }
 }
 
-fn full_context_files(files: &[ProcessedFile]) -> Result<Vec<ProcessedFile>> {
+fn full_context_files(
+    files: &[ProcessedFile],
+    counter: &TokenCounter,
+) -> Result<Vec<ProcessedFile>> {
     files
         .iter()
         .cloned()
         .map(|mut file| {
             file.level = CompressionLevel::Full;
-            file.token_count = count_text_tokens(file.content())?;
+            file.token_count = count_text_tokens(file.content(), counter);
             Ok(file)
         })
         .collect()
@@ -430,13 +476,14 @@ fn fit_formatted_context(
     mut files: Vec<ProcessedFile>,
     metadata: &RepositoryMetadata,
     cli: &Cli,
+    counter: &TokenCounter,
 ) -> Result<(Vec<ProcessedFile>, String, usize)> {
     loop {
         sort_files(&mut files, cli.sort);
         let context = maybe_wrap_prompt(format_context(&files, metadata, cli), cli);
-        let output_tokens = count_text_tokens(&context)?;
+        let output_tokens = count_text_tokens(&context, counter);
 
-        if output_tokens <= cli.max_tokens || !downgrade_largest_file(&mut files)? {
+        if output_tokens <= cli.max_tokens || !downgrade_largest_file(&mut files, counter) {
             return Ok((files, context, output_tokens));
         }
     }
@@ -446,6 +493,7 @@ fn reserved_content_budget(
     files: &[ProcessedFile],
     metadata: &RepositoryMetadata,
     cli: &Cli,
+    counter: &TokenCounter,
 ) -> Result<usize> {
     let overhead_files = files
         .iter()
@@ -464,7 +512,7 @@ fn reserved_content_budget(
         })
         .collect::<Vec<_>>();
     let overhead = maybe_wrap_prompt(format_context(&overhead_files, metadata, cli), cli);
-    let overhead_tokens = count_text_tokens(&overhead)?;
+    let overhead_tokens = count_text_tokens(&overhead, counter);
 
     Ok(cli.max_tokens.saturating_sub(overhead_tokens))
 }
@@ -576,6 +624,7 @@ fn print_summary(stats: &RunStats) {
     println!("  output: {}", stats.output_target);
     println!("  files_included: {}", stats.files_scanned);
     println!("  selected_level: {}", stats.selected_level.as_u8());
+    println!("  tokenizer: {}", stats.tokenizer.as_str());
     println!(
         "  output_tokens: {} / {}",
         stats.shrunk_tokens, stats.max_tokens
@@ -658,6 +707,7 @@ mod tests {
 
     fn assert_final_token_count_matches(format: OutputFormat) {
         let cli = test_cli(format);
+        let counter = TokenCounter::new(cli.tokenizer).unwrap();
         let metadata = RepositoryMetadata {
             generated_at: "1234567890".to_owned(),
             repo_root: "/tmp/demo".to_owned(),
@@ -676,15 +726,16 @@ mod tests {
         )];
 
         let (_files, context, output_tokens) =
-            fit_formatted_context(files, &metadata, &cli).unwrap();
+            fit_formatted_context(files, &metadata, &cli, &counter).unwrap();
 
-        assert_eq!(output_tokens, count_text_tokens(&context).unwrap());
+        assert_eq!(output_tokens, count_text_tokens(&context, &counter));
     }
 
     fn test_cli(format: OutputFormat) -> Cli {
         Cli {
             path: PathBuf::from("."),
             max_tokens: 12000,
+            tokenizer: TokenizerKind::default(),
             max_file_bytes: 1_048_576,
             level: 2,
             output: OutputDestination::File,
@@ -695,6 +746,7 @@ mod tests {
             sort: SortMode::Path,
             directory_summaries: false,
             fail_over_budget: false,
+            incremental: false,
             include: Vec::new(),
             exclude: Vec::new(),
             respect_gitignore: true,

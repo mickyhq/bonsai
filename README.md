@@ -166,6 +166,13 @@ Detailed repo context:
 bonsai . --max-tokens 12000 --level 2
 ```
 
+Use a model-family tokenizer:
+
+```sh
+bonsai . --tokenizer o200k_base
+bonsai . --tokenizer gpt-4o
+```
+
 Only scan `src`:
 
 ```sh
@@ -226,6 +233,12 @@ Fail when output is still over budget after maximum compression:
 
 ```sh
 bonsai . --max-tokens 12000 --fail-over-budget
+```
+
+Only include files changed since the last cached local run:
+
+```sh
+bonsai . --incremental
 ```
 
 Write starter agent instructions:

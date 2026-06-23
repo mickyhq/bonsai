@@ -94,6 +94,31 @@ grep -Fq '<context>' "$tmp_root/prompt.txt"
 grep -Fq 'Find risks.' "$tmp_root/ask.txt"
 grep -Fq '<context>' "$tmp_root/ask.txt"
 
+incremental_repo="$tmp_root/incremental-repo"
+make_golden_repo "$incremental_repo"
+"$bin" "$incremental_repo" --incremental --output-file "$tmp_root/incremental-first.xml"
+grep -Fq 'path="Cargo.toml"' "$tmp_root/incremental-first.xml"
+grep -Fq 'path="src/lib.rs"' "$tmp_root/incremental-first.xml"
+
+"$bin" "$incremental_repo" --incremental --output-file "$tmp_root/incremental-second.xml"
+if grep -Fq 'path="Cargo.toml"' "$tmp_root/incremental-second.xml" || grep -Fq 'path="src/lib.rs"' "$tmp_root/incremental-second.xml"; then
+  printf 'unchanged incremental run included files\n' >&2
+  exit 1
+fi
+
+cat >> "$incremental_repo/src/lib.rs" <<'RS'
+
+pub fn farewell(name: &str) -> String {
+    format!("bye {name}")
+}
+RS
+"$bin" "$incremental_repo" --incremental --output-file "$tmp_root/incremental-third.xml"
+grep -Fq 'path="src/lib.rs"' "$tmp_root/incremental-third.xml"
+if grep -Fq 'path="Cargo.toml"' "$tmp_root/incremental-third.xml"; then
+  printf 'incremental run included unchanged file\n' >&2
+  exit 1
+fi
+
 empty_repo="$tmp_root/empty-repo"
 mkdir -p "$empty_repo"
 if "$bin" "$empty_repo" --fail-on-empty --output-file "$tmp_root/empty.xml" >/dev/null 2>&1; then
