@@ -14,6 +14,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{bail, Context, Result};
 use clap::{Arg, ArgAction, Command as ClapCommand, CommandFactory, Parser, ValueEnum};
 use clap_complete::{generate, Shell};
+use sha2::{Digest, Sha256};
 
 use budget::{
     count_text_tokens, downgrade_largest_file, file_priority_score, optimize_budget, ProcessedFile,
@@ -1184,12 +1185,8 @@ fn sort_files(files: &mut [ProcessedFile], sort: SortMode) {
 }
 
 fn stable_content_hash(content: &str) -> String {
-    let mut hash = 0xcbf29ce484222325u64;
-    for byte in content.as_bytes() {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
-    format!("{hash:016x}")
+    let digest = Sha256::digest(content.as_bytes());
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn build_directory_summaries(files: &[ProcessedFile]) -> Vec<DirectorySummary> {

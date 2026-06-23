@@ -58,6 +58,9 @@ if [[ "$first_path" != '"path":"Cargo.toml"' ]]; then
   exit 1
 fi
 
+"$bin" "$repo" --file-hashes --project-map-only --output-file "$tmp_root/hashes.xml"
+grep -Eq 'hash="[0-9a-f]{64}"' "$tmp_root/hashes.xml"
+
 "$bin" "$repo" --dry-run --output-file "$tmp_root/dry-run.xml" > "$tmp_root/dry-run.txt"
 grep -Fq 'dry_run:' "$tmp_root/dry-run.txt"
 grep -Fq '  estimated_tokens:' "$tmp_root/dry-run.txt"

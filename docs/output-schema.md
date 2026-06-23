@@ -40,10 +40,10 @@ Default XML shape:
 </project_map>
 ```
 
-`hash` appears on project map entries only with `--file-hashes`:
+`hash` appears on project map entries only with `--file-hashes`. It is a SHA-256 hash of the original file content.
 
 ```xml
-<entry path="src/main.rs" level="2" tokens="120" hash="content_hash" />
+<entry path="src/main.rs" level="2" tokens="120" hash="sha256_hex" />
 ```
 
 ## JSON
@@ -95,8 +95,8 @@ Default JSON shape:
 ]
 ```
 
-`hash` appears on project map entries only with `--file-hashes`:
+`hash` appears on project map entries only with `--file-hashes`. It is a SHA-256 hash of the original file content.
 
 ```json
-{ "path": "src/main.rs", "level": 2, "tokens": 120, "hash": "content_hash" }
+{ "path": "src/main.rs", "level": 2, "tokens": 120, "hash": "sha256_hex" }
 ```
