@@ -23,5 +23,4 @@
 
 ## Testing And Release
 
-- Run `cargo fmt --check` in CI once current formatting drift is cleaned up.
 - Add release smoke test that runs downloaded binaries with `--incremental`.

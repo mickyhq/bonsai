@@ -43,15 +43,9 @@ impl FromStr for TokenizerKind {
     type Err = String;
 
     fn from_str(value: &str) -> std::result::Result<Self, Self::Err> {
-        let normalized = value
-            .trim()
-            .to_ascii_lowercase()
-            .replace(['-', '.'], "_");
-        let starts_with_any = |prefixes: &[&str]| {
-            prefixes
-                .iter()
-                .any(|prefix| normalized.starts_with(prefix))
-        };
+        let normalized = value.trim().to_ascii_lowercase().replace(['-', '.'], "_");
+        let starts_with_any =
+            |prefixes: &[&str]| prefixes.iter().any(|prefix| normalized.starts_with(prefix));
 
         if starts_with_any(&["gpt_4o", "gpt_4_1", "gpt_5", "o1", "o3", "o4"]) {
             return Ok(Self::O200kBase);
