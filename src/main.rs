@@ -66,6 +66,9 @@ struct Cli {
     #[arg(long)]
     project_map_only: bool,
 
+    #[arg(long, help = "Include stable content hashes in project map entries")]
+    file_hashes: bool,
+
     #[arg(long)]
     no_content: bool,
 
@@ -221,7 +224,14 @@ fn main() -> Result<()> {
             continue;
         }
 
-        files.push(ProcessedFile::new(relative_path, requested_level, variants));
+        let content_hash = if cli.file_hashes {
+            variants.full.as_deref().map(stable_content_hash)
+        } else {
+            None
+        };
+        let mut file = ProcessedFile::new(relative_path, requested_level, variants);
+        file.content_hash = content_hash;
+        files.push(file);
     }
     let deleted_files = deleted_files(
         &cli,
@@ -776,6 +786,7 @@ fn format_context(
 fn format_options(files: &[ProcessedFile], cli: &Cli, deleted_files: &[String]) -> FormatOptions {
     FormatOptions {
         project_map_only: cli.project_map_only,
+        include_file_hashes: cli.file_hashes,
         include_files: !cli.project_map_only && !cli.no_content,
         include_content: !cli.project_map_only && !cli.no_content,
         deleted_files: if cli.project_map_only {
@@ -829,6 +840,7 @@ fn reserved_content_budget(
                 },
             );
             overhead_file.token_count = 0;
+            overhead_file.content_hash = file.content_hash.clone();
             overhead_file
         })
         .collect::<Vec<_>>();
@@ -856,6 +868,15 @@ fn sort_files(files: &mut [ProcessedFile], sort: SortMode) {
                 .then(left.path.cmp(&right.path))
         }),
     }
+}
+
+fn stable_content_hash(content: &str) -> String {
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in content.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("{hash:016x}")
 }
 
 fn build_directory_summaries(files: &[ProcessedFile]) -> Vec<DirectorySummary> {
@@ -1075,6 +1096,7 @@ mod tests {
             output_file: PathBuf::from("bonsai.xml"),
             format,
             project_map_only: false,
+            file_hashes: false,
             no_content: false,
             sort: SortMode::Path,
             directory_summaries: false,

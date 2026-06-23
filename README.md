@@ -209,6 +209,12 @@ Only write the project map:
 bonsai . --project-map-only
 ```
 
+Include file hashes in the project map:
+
+```sh
+bonsai . --file-hashes
+```
+
 Write metadata and project map without file bodies:
 
 ```sh

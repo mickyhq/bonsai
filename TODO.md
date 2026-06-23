@@ -2,7 +2,6 @@
 
 ## Output Quality
 
-- Add optional file hashes in the project map for stronger repeatability checks.
 - Add `--changed-since <git-ref>` mode that uses git diff for branch review workflows.
 
 ## Parser Coverage

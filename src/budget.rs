@@ -105,6 +105,7 @@ pub struct ProcessedFile {
     pub level: CompressionLevel,
     pub variants: FileVariants,
     pub token_count: usize,
+    pub content_hash: Option<String>,
 }
 
 impl ProcessedFile {
@@ -114,6 +115,7 @@ impl ProcessedFile {
             level,
             variants,
             token_count: 0,
+            content_hash: None,
         }
     }
 

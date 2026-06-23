@@ -38,6 +38,12 @@ Default XML shape:
 </project_map>
 ```
 
+`hash` appears on project map entries only with `--file-hashes`:
+
+```xml
+<entry path="src/main.rs" level="2" tokens="120" hash="content_hash" />
+```
+
 ## JSON
 
 Default JSON shape:
@@ -83,4 +89,10 @@ Default JSON shape:
 [
   { "path": "src/main.rs", "level": 2, "tokens": 120 }
 ]
+```
+
+`hash` appears on project map entries only with `--file-hashes`:
+
+```json
+{ "path": "src/main.rs", "level": 2, "tokens": 120, "hash": "content_hash" }
 ```
