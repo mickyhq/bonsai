@@ -5,10 +5,6 @@
 - Improve JSON/YAML/TOML compression to preserve nested important sections better.
 - Improve Markdown table compression to keep headers plus sampled rows for long tables.
 
-## Parser Coverage
-
-- Add stronger Objective-C / Objective-C++ structure extraction for `.m` and `.mm`.
-
 ## Testing And Release
 
 - Move release binary incremental smoke into a shared test script used by release workflow.

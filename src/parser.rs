@@ -507,6 +507,7 @@ fn should_emit_tree_map_node(node: Node, syntax: SyntaxKind) -> bool {
 
 fn compact_text_context(path: &Path, source: &str) -> String {
     match extension(path).as_deref() {
+        Some("m" | "mm") => compact_objective_c_context(source, 180),
         Some("md") => compact_markdown_context(source),
         Some("json" | "yaml" | "yml" | "toml") => compact_config_lines(path, source, 180),
         Some("vue" | "svelte" | "astro" | "html") => compact_web_context(source, 160),
@@ -516,6 +517,7 @@ fn compact_text_context(path: &Path, source: &str) -> String {
 
 fn build_text_tree_map(path: &Path, source: &str) -> String {
     match extension(path).as_deref() {
+        Some("m" | "mm") => compact_objective_c_context(source, 120),
         Some("md") => {
             let headings = source
                 .lines()
@@ -535,6 +537,130 @@ fn build_text_tree_map(path: &Path, source: &str) -> String {
         Some("vue" | "svelte" | "astro" | "html") => compact_web_context(source, 80),
         _ => compact_non_empty_lines(source, 80),
     }
+}
+
+fn compact_objective_c_context(source: &str, max_lines: usize) -> String {
+    let mut output = Vec::new();
+    let mut brace_depth = 0i32;
+
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || is_objective_c_noise(trimmed) {
+            continue;
+        }
+
+        if brace_depth > 0 {
+            brace_depth = (brace_depth + brace_delta(trimmed)).max(0);
+            continue;
+        }
+
+        let kept = if is_objective_c_header_line(trimmed)
+            || is_objective_c_declaration(trimmed)
+            || is_cpp_shape_line(trimmed)
+        {
+            Some(collapse_body_line(trimmed))
+        } else {
+            None
+        };
+
+        if let Some(line) = kept {
+            output.push(truncate_line(line, 240));
+            if output.len() >= max_lines {
+                break;
+            }
+        }
+
+        brace_depth = (brace_depth + brace_delta(trimmed)).max(0);
+    }
+
+    dedupe_preserving_order(output).join("\n")
+}
+
+fn is_objective_c_noise(line: &str) -> bool {
+    line.starts_with("//") || line.starts_with("/*") || line.starts_with('*')
+}
+
+fn is_objective_c_header_line(line: &str) -> bool {
+    line.starts_with("#import")
+        || line.starts_with("#include")
+        || line.starts_with("#define")
+        || line.starts_with("#pragma")
+        || line.starts_with("@class")
+        || line.starts_with("@protocol")
+        || line.starts_with("@interface")
+        || line.starts_with("@implementation")
+        || line.starts_with("@end")
+        || line.starts_with("@property")
+        || line.starts_with("@synthesize")
+        || line.starts_with("@dynamic")
+}
+
+fn is_objective_c_declaration(line: &str) -> bool {
+    (line.starts_with("- ")
+        || line.starts_with("+ ")
+        || line.starts_with("-(")
+        || line.starts_with("+("))
+        && line.contains(')')
+}
+
+fn is_cpp_shape_line(line: &str) -> bool {
+    let first_word = line
+        .split(|ch: char| ch.is_whitespace() || ch == '<' || ch == ':')
+        .next()
+        .unwrap_or_default();
+
+    matches!(
+        first_word,
+        "class"
+            | "struct"
+            | "enum"
+            | "namespace"
+            | "template"
+            | "typedef"
+            | "using"
+            | "extern"
+            | "static"
+            | "const"
+            | "void"
+            | "int"
+            | "bool"
+            | "float"
+            | "double"
+            | "std"
+            | "NSString"
+            | "NSArray"
+            | "NSDictionary"
+            | "instancetype"
+    ) && (line.contains('(') || line.ends_with(';') || line.ends_with('{'))
+        && !is_control_flow_line(line)
+}
+
+fn is_control_flow_line(line: &str) -> bool {
+    matches!(
+        line.split_whitespace().next().unwrap_or_default(),
+        "if" | "for" | "while" | "switch" | "return" | "else" | "do"
+    )
+}
+
+fn collapse_body_line(line: &str) -> String {
+    if let Some((head, _)) = line.split_once('{') {
+        let head = head.trim_end();
+        if head.is_empty() {
+            "{ ... }".to_owned()
+        } else {
+            format!("{head} {{ ... }}")
+        }
+    } else {
+        line.to_owned()
+    }
+}
+
+fn brace_delta(line: &str) -> i32 {
+    line.chars().fold(0, |delta, ch| match ch {
+        '{' => delta + 1,
+        '}' => delta - 1,
+        _ => delta,
+    })
 }
 
 fn compact_web_context(source: &str, max_lines: usize) -> String {
@@ -1116,6 +1242,91 @@ public:
                 variants.skeleton
             );
         }
+    }
+
+    #[test]
+    fn objective_c_compaction_keeps_structure() {
+        let path = write_temp_source(
+            "m",
+            r#"
+#import <Foundation/Foundation.h>
+
+@interface Greeter : NSObject
+@property (nonatomic, copy) NSString *prefix;
+- (NSString *)greet:(NSString *)name;
+@end
+
+static NSString *FormatName(NSString *name) {
+    return [name uppercaseString];
+}
+
+@implementation Greeter
+- (NSString *)greet:(NSString *)name {
+    NSString *formatted = FormatName(name);
+    return [self.prefix stringByAppendingString:formatted];
+}
+@end
+"#,
+        );
+
+        let variants = compress_file(&path, CompressionLevel::Skeleton).unwrap();
+
+        assert!(variants
+            .skeleton
+            .contains("#import <Foundation/Foundation.h>"));
+        assert!(variants
+            .skeleton
+            .contains("@property (nonatomic, copy) NSString *prefix;"));
+        assert!(variants
+            .skeleton
+            .contains("- (NSString *)greet:(NSString *)name { ... }"));
+        assert!(variants
+            .tree_map
+            .contains("static NSString *FormatName(NSString *name) { ... }"));
+        assert!(!variants.skeleton.contains("uppercaseString"));
+        assert!(!variants.skeleton.contains("stringByAppendingString"));
+    }
+
+    #[test]
+    fn objective_cpp_compaction_keeps_cpp_shapes() {
+        let path = write_temp_source(
+            "mm",
+            r#"
+#import <Foundation/Foundation.h>
+#include <string>
+
+class NameBuilder {
+public:
+    std::string build() const {
+        return "hello";
+    }
+};
+
+std::string BuildName() {
+    return "world";
+}
+
+@implementation Greeter
+- (NSString *)greet:(NSString *)name {
+    std::string value = BuildName();
+    return [NSString stringWithUTF8String:value.c_str()];
+}
+@end
+"#,
+        );
+
+        let variants = compress_file(&path, CompressionLevel::Skeleton).unwrap();
+
+        assert!(variants.tree_map.contains("#include <string>"));
+        assert!(variants.tree_map.contains("class NameBuilder { ... }"));
+        assert!(variants
+            .tree_map
+            .contains("std::string BuildName() { ... }"));
+        assert!(variants
+            .tree_map
+            .contains("- (NSString *)greet:(NSString *)name { ... }"));
+        assert!(!variants.skeleton.contains("return \"world\""));
+        assert!(!variants.skeleton.contains("value.c_str"));
     }
 
     #[test]

@@ -331,7 +331,7 @@ Tree-sitter parsers:
 JavaScript, TypeScript, Python, Rust, Go, Java, C#, Swift, Kotlin, C, C++
 ```
 
-Compact line-based context:
+Compact structure extraction:
 
 ```text
 Objective-C, web templates, Markdown, JSON, YAML, TOML
