@@ -194,6 +194,7 @@ Write only the project map:
 
 ```sh
 bonsai . --project-map-only
+bonsai . --project-map compact --project-map-only
 ```
 
 Include stable file hashes in the project map:

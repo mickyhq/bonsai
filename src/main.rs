@@ -23,7 +23,7 @@ use budget::{
 use cache::{cache_path_for_root, CacheDiagnostics, CacheMetadata, CacheStatus, ParseCache};
 use formatter::{
     format_repository_context_json, format_repository_context_xml, DirectorySummary, FormatOptions,
-    RepositoryMetadata,
+    ProjectMapMode as FormatProjectMapMode, RepositoryMetadata,
 };
 use parser::{compress_file, parser_support_for_extension, CompressionLevel, ParserMode};
 use walker::{
@@ -71,6 +71,9 @@ struct Cli {
 
     #[arg(long)]
     project_map_only: bool,
+
+    #[arg(long, value_enum, default_value_t = ProjectMapMode::Flat)]
+    project_map: ProjectMapMode,
 
     #[arg(long, help = "Include stable content hashes in project map entries")]
     file_hashes: bool,
@@ -242,6 +245,21 @@ enum SortMode {
     Path,
     Tokens,
     Priority,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum ProjectMapMode {
+    Flat,
+    Compact,
+}
+
+impl From<ProjectMapMode> for FormatProjectMapMode {
+    fn from(mode: ProjectMapMode) -> Self {
+        match mode {
+            ProjectMapMode::Flat => Self::Flat,
+            ProjectMapMode::Compact => Self::Compact,
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -1245,6 +1263,7 @@ fn format_context(
 fn format_options(files: &[ProcessedFile], cli: &Cli, deleted_files: &[String]) -> FormatOptions {
     FormatOptions {
         project_map_only: cli.project_map_only,
+        project_map_mode: cli.project_map.into(),
         include_file_hashes: cli.file_hashes,
         include_files: !cli.project_map_only && !cli.no_content,
         include_content: !cli.project_map_only && !cli.no_content,
@@ -1675,6 +1694,7 @@ mod tests {
             output_file: PathBuf::from("bonsai.xml"),
             format,
             project_map_only: false,
+            project_map: ProjectMapMode::Flat,
             file_hashes: false,
             no_content: false,
             dry_run: false,

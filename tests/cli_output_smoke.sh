@@ -39,6 +39,15 @@ if grep -Fq '<metadata' "$tmp_root/map.xml"; then
   exit 1
 fi
 
+"$bin" "$repo" --project-map compact --project-map-only --output-file "$tmp_root/compact-map.xml"
+grep -Fq '<project_map mode="compact">' "$tmp_root/compact-map.xml"
+grep -Fq '<dir path="src/deep"' "$tmp_root/compact-map.xml"
+grep -Fq '<entry name="leaf.rs"' "$tmp_root/compact-map.xml"
+if grep -Fq 'path="src/deep/leaf.rs"' "$tmp_root/compact-map.xml"; then
+  printf 'compact project map included full file path\n' >&2
+  exit 1
+fi
+
 "$bin" "$repo" --no-content --output-file "$tmp_root/no-content.xml"
 grep -Fq '<metadata' "$tmp_root/no-content.xml"
 grep -Fq '<project_map>' "$tmp_root/no-content.xml"

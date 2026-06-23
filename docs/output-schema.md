@@ -40,6 +40,16 @@ Default XML shape:
 </project_map>
 ```
 
+`--project-map compact` groups entries by directory:
+
+```xml
+<project_map mode="compact">
+  <dir path="src" files="2" tokens="240">
+    <entry name="main.rs" level="2" tokens="120" />
+  </dir>
+</project_map>
+```
+
 `hash` appears on project map entries only with `--file-hashes`. It is a SHA-256 hash of the original file content.
 
 ```xml
@@ -92,6 +102,16 @@ Default JSON shape:
 ```json
 [
   { "path": "src/main.rs", "level": 2, "tokens": 120 }
+]
+```
+
+`--project-map compact` groups entries by directory:
+
+```json
+[
+  { "path": "src", "files": 2, "tokens": 240, "entries": [
+    { "name": "main.rs", "level": 2, "tokens": 120 }
+  ] }
 ]
 ```
 
