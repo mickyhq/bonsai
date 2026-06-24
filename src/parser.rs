@@ -800,12 +800,14 @@ fn compact_markdown_context(source: &str) -> String {
     let mut kept_fence_lines = 0usize;
     let mut in_dropped_fence = false;
     let mut table_buffer: Vec<String> = Vec::new();
+    let mut list_buffer: Vec<String> = Vec::new();
 
     for line in source.lines() {
         let trimmed = line.trim();
 
         if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
             flush_markdown_table(&mut output, &mut table_buffer);
+            flush_markdown_list(&mut output, &mut list_buffer);
             if in_kept_fence {
                 output.push(trimmed.to_owned());
                 in_kept_fence = false;
@@ -841,37 +843,47 @@ fn compact_markdown_context(source: &str) -> String {
 
         if in_dropped_fence || is_noisy_markdown_line(trimmed) {
             flush_markdown_table(&mut output, &mut table_buffer);
+            flush_markdown_list(&mut output, &mut list_buffer);
             continue;
         }
 
         if is_markdown_table_line(trimmed) {
+            flush_markdown_list(&mut output, &mut list_buffer);
             table_buffer.push(truncate_context_line(trimmed.to_owned()));
             continue;
         }
         flush_markdown_table(&mut output, &mut table_buffer);
 
         if trimmed.starts_with('#') {
+            flush_markdown_list(&mut output, &mut list_buffer);
             output.push(truncate_context_line(trimmed.to_owned()));
             keep_after_heading = 2;
             continue;
         }
 
+        if is_important_markdown_list_item(trimmed) {
+            keep_after_heading = 0;
+            list_buffer.push(truncate_context_line(trimmed.to_owned()));
+            continue;
+        }
+
         if keep_after_heading > 0 && is_summary_markdown_line(trimmed) {
+            flush_markdown_list(&mut output, &mut list_buffer);
             output.push(truncate_context_line(trimmed.to_owned()));
             keep_after_heading -= 1;
             continue;
         }
 
-        if is_important_markdown_list_item(trimmed) {
+        if has_markdown_link(trimmed) {
+            flush_markdown_list(&mut output, &mut list_buffer);
             output.push(truncate_context_line(trimmed.to_owned()));
             continue;
         }
 
-        if has_markdown_link(trimmed) {
-            output.push(truncate_context_line(trimmed.to_owned()));
-        }
+        flush_markdown_list(&mut output, &mut list_buffer);
     }
     flush_markdown_table(&mut output, &mut table_buffer);
+    flush_markdown_list(&mut output, &mut list_buffer);
 
     if output.is_empty() {
         compact_non_empty_lines(source, 120)
@@ -889,23 +901,32 @@ fn flush_markdown_table(output: &mut Vec<String>, table: &mut Vec<String>) {
         return;
     }
 
-    output.extend(sample_markdown_table(table));
+    output.extend(sample_markdown_lines(table));
     table.clear();
 }
 
-fn sample_markdown_table(table: &[String]) -> Vec<String> {
-    if table.len() <= 14 {
-        return table.to_vec();
+fn flush_markdown_list(output: &mut Vec<String>, list: &mut Vec<String>) {
+    if list.is_empty() {
+        return;
+    }
+
+    output.extend(sample_markdown_lines(list));
+    list.clear();
+}
+
+fn sample_markdown_lines(lines: &[String]) -> Vec<String> {
+    if lines.len() <= 14 {
+        return lines.to_vec();
     }
 
     let mut sampled = Vec::new();
-    sampled.extend(table.iter().take(10).cloned());
+    sampled.extend(lines.iter().take(10).cloned());
     sampled.push("...".to_owned());
 
-    let tail_start = table.len().saturating_sub(4);
-    for row in &table[tail_start..] {
-        if sampled.last() != Some(row) {
-            sampled.push(row.clone());
+    let tail_start = lines.len().saturating_sub(4);
+    for line in &lines[tail_start..] {
+        if sampled.last() != Some(line) {
+            sampled.push(line.clone());
         }
     }
 
@@ -1902,6 +1923,25 @@ graph TD
         assert!(variants.skeleton.contains("| row-17 | value-17 |"));
         assert!(variants.skeleton.contains("| row-20 | value-20 |"));
         assert!(!variants.skeleton.contains("| row-12 | value-12 |"));
+    }
+
+    #[test]
+    fn markdown_samples_long_lists_with_head_and_tail() {
+        let mut source = String::from("# Tasks\n\n");
+        for index in 1..=20 {
+            source.push_str(&format!("- item-{index}\n"));
+        }
+
+        let path = write_temp_source("md", &source);
+        let variants = compress_file(&path, CompressionLevel::Skeleton).unwrap();
+        let lines = variants.skeleton.lines().collect::<Vec<_>>();
+
+        assert!(lines.contains(&"- item-1"));
+        assert!(lines.contains(&"- item-10"));
+        assert!(lines.contains(&"..."));
+        assert!(lines.contains(&"- item-17"));
+        assert!(lines.contains(&"- item-20"));
+        assert!(!lines.contains(&"- item-12"));
     }
 
     #[test]
