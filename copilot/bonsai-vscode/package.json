@@ -2,7 +2,7 @@
   "name": "bonsai-vscode",
   "displayName": "Bonsai",
   "description": "Bonsai XML for GitHub Copilot Chat and Codex.",
-  "version": "0.4.2",
+  "version": "0.5.2",
   "publisher": "mickyhq",
   "author": {
     "name": "Micky Balladelli"

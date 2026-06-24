@@ -5,7 +5,7 @@
 <p align="center">
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg" /></a>
   <img alt="Language: Rust" src="https://img.shields.io/badge/Language-Rust-orange.svg" />
-  <img alt="Version" src="https://img.shields.io/badge/Version-0.4.2-lightgrey.svg" />
+  <img alt="Version" src="https://img.shields.io/badge/Version-0.5.2-lightgrey.svg" />
 </p>
 
 # Bonsai
@@ -425,7 +425,7 @@ copilot/bonsai-vscode
 Install the packaged VSIX:
 
 ```sh
-code --install-extension copilot/bonsai-vscode/bonsai-vscode-0.4.2.vsix
+code --install-extension copilot/bonsai-vscode/bonsai-vscode-0.5.2.vsix
 ```
 
 Command Palette commands:
