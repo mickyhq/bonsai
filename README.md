@@ -504,6 +504,8 @@ Test:
 cargo test
 ```
 
+CLI integration tests include golden output and token-cost fixtures for large Markdown tables, large config files, import-heavy code, and many-file repos.
+
 Build:
 
 ```sh

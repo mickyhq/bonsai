@@ -1,0 +1,32 @@
+detailed_stats:
+  files_reported: 23
+  per_file_tokens:
+    README.md: 124
+    package.json: 443
+    src/imports.ts: 58
+    src/many/file01.rs: 11
+    src/many/file02.rs: 11
+    src/many/file03.rs: 11
+    src/many/file04.rs: 11
+    src/many/file05.rs: 11
+    src/many/file06.rs: 11
+    src/many/file07.rs: 11
+    src/many/file08.rs: 11
+    src/many/file09.rs: 11
+    src/many/file10.rs: 11
+    src/many/file11.rs: 11
+    src/many/file12.rs: 11
+    src/many/file13.rs: 11
+    src/many/file14.rs: 11
+    src/many/file15.rs: 11
+    src/many/file16.rs: 11
+    src/many/file17.rs: 11
+    src/many/file18.rs: 11
+    src/many/file19.rs: 11
+    src/many/file20.rs: 11
+  tokens_by_extension:
+    .json: 443
+    .rs: 220
+    .md: 124
+    .ts: 58
+  token_distribution: min=11, median=11.0, mean=36.7, max=443

@@ -103,6 +103,89 @@ pub fn ignored() {}
 RS
 }
 
+make_token_cost_repo() {
+  local repo="$1"
+  mkdir -p "$repo/src/many"
+  cat > "$repo/README.md" <<'MD'
+# Token Cost Fixture
+
+| key | value |
+| --- | --- |
+MD
+  for index in $(seq 1 40); do
+    printf '| row-%02d | value-%02d |\n' "$index" "$index" >> "$repo/README.md"
+  done
+
+  cat > "$repo/package.json" <<'JSON'
+{
+  "name": "token-cost-fixture",
+  "version": "0.1.0",
+  "description": "Large config fixture for Bonsai token costs.",
+  "scripts": {
+    "build": "vite build",
+    "test": "vitest run",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+JSON
+  for index in $(seq 1 24); do
+    comma=","
+    if [[ "$index" == "24" ]]; then
+      comma=""
+    fi
+    printf '    "dep-%02d": "1.0.%d"%s\n' "$index" "$index" "$comma" >> "$repo/package.json"
+  done
+  cat >> "$repo/package.json" <<'JSON'
+  },
+  "files": [
+JSON
+  for index in $(seq 1 30); do
+    comma=","
+    if [[ "$index" == "30" ]]; then
+      comma=""
+    fi
+    printf '    "dist/file-%02d.js"%s\n' "$index" "$comma" >> "$repo/package.json"
+  done
+  cat >> "$repo/package.json" <<'JSON'
+  ],
+  "fixtures": {
+    "ignored": "noise"
+  }
+}
+JSON
+
+  cat > "$repo/src/imports.ts" <<'TS'
+import value01 from './modules/value01'
+import value02 from './modules/value02'
+import value03 from './modules/value03'
+import value04 from './modules/value04'
+import value05 from './modules/value05'
+import value06 from './modules/value06'
+import value07 from './modules/value07'
+import value08 from './modules/value08'
+import value09 from './modules/value09'
+import value10 from './modules/value10'
+import value11 from './modules/value11'
+import value12 from './modules/value12'
+import value13 from './modules/value13'
+import value14 from './modules/value14'
+import value15 from './modules/value15'
+
+export function total() {
+  return value01 + value02 + value03
+}
+TS
+
+  for index in $(seq 1 20); do
+    padded="$(printf '%02d' "$index")"
+    cat > "$repo/src/many/file$padded.rs" <<RS
+pub fn value_$padded() -> usize {
+    $index
+}
+RS
+  done
+}
+
 golden_repo="$tmp_root/golden-repo"
 make_golden_repo "$golden_repo"
 "$bin" "$golden_repo" --max-tokens 12000 --level 2 --output-file "$tmp_root/context.xml"
@@ -165,6 +248,11 @@ grep -Fxq 'vendor/lib.rs' "$tmp_root/include-generated.txt"
 
 "$bin" "$flag_repo" --no-respect-gitignore --print-files --output-file "$tmp_root/no-respect.xml" > "$tmp_root/no-respect.txt"
 grep -Fxq 'ignored.rs' "$tmp_root/no-respect.txt"
+
+token_cost_repo="$tmp_root/token-cost-repo"
+make_token_cost_repo "$token_cost_repo"
+"$bin" "$token_cost_repo" --max-tokens 12000 --level 2 --sort path --detailed-stats --tokenizer cl100k_base --output-file "$tmp_root/token-cost.xml" > "$tmp_root/token-cost.txt"
+diff -u "$repo_root/tests/golden/token-costs.txt" "$tmp_root/token-cost.txt"
 
 "$bin" "$golden_repo" --prompt --output-file "$tmp_root/prompt.txt"
 grep -Fq 'Use this repo context to explain the architecture' "$tmp_root/prompt.txt"
